@@ -238,7 +238,7 @@ async def delete_id(ctx):
                 except Exception:
                     pass
         
-        await ctx.send(f"❌ {ctx.author.mention}, your Asphalt game ID has been completely removed{role_message} You will no longer receive notifications or DMs.")
+        await ctx.send(f"❌ {ctx.author.mention}, your Asphalt game ID has been completely removed{role_message} You will no longer receive notifications or DMs. ❌")
     else:
         await ctx.send("⚠️ You don't have an Asphalt game ID registered in this server. ⚠️")
 
@@ -262,7 +262,7 @@ async def toggle_dm(ctx):
     save_data(data)
     
     status = "ON" if data[guild_id][user_id]["dm_enabled"] else "OFF"
-    await ctx.send(f"🔔 DM code alerts are now **{status}** for {ctx.author.mention}.")
+    await ctx.send(f"🔔 DM code alerts are now **{status}** for {ctx.author.mention}. 🔔")
 
 
 # --- ADMIN COMMANDS (SERVER-SCOPED) ---
@@ -275,7 +275,7 @@ async def set_admin_role(ctx, role: discord.Role = None):
         config = load_config()
         guild_id = str(ctx.guild.id)
         p = config.get(guild_id, {}).get("prefix", "!")
-        return await ctx.send(f"⚠️ Please mention a role or give an ID. Usage: `{p}setadminrole @RoleName` or `{p}setadminrole 1234567890` ⚠️")
+        return await ctx.send(f"⚠️ Please mention a role or give an ID for example:  `{p}setadminrole @RoleName` or `{p}setadminrole 1234567890` ⚠️")
         
     config = load_config()
     guild_id = str(ctx.guild.id)
@@ -358,7 +358,7 @@ async def clear_history(ctx):
         save_data(data)
         await ctx.send("🧹 **Database Cleared! 🧹")
     else:
-        await ctx.send("🧹 **Database Empty** 🧹")
+        await ctx.send("🧹 **Database Cleared!** 🧹")
 
 @bot.command(name="listplayers")
 @has_admin_or_delegated_role()
@@ -371,7 +371,7 @@ async def list_players(ctx):
     if not server_data:
         return await ctx.send("🧹 **Server Database Empty** 🧹")
     
-    embed = discord.Embed(title=f"__📋 Registered Profiles for {ctx.guild.name}__", color=discord.Color.blue())
+    embed = discord.Embed(title=f"📋 __Registered Profiles for {ctx.guild.name}__ 📋", color=discord.Color.blue())
     for disc_id, info in server_data.items():
         pref = "✅ Enabled" if info.get("dm_enabled", True) else "❌ Disabled"
         embed.add_field(name=f"User: {info['username']}", value=f"**Game ID: {info['player_id']} | DMs: {pref}**", inline=False)
