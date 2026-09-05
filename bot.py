@@ -160,14 +160,14 @@ async def show_commands(ctx):
 async def set_id(ctx, player_id: str = None):
     """Link your Asphalt Player ID. Usage: !set_id YOUR_ID"""
     if not ctx.guild:
-        return await ctx.send("⚠️ This command can only be used in a server.")
+        return await ctx.send("⚠️ This command can only be used in a server. ⚠️")
         
     config = load_config()
     guild_id = str(ctx.guild.id)
     p = config.get(guild_id, {}).get("prefix", "!")
     
     if not player_id:
-        return await ctx.send(f"⚠️ Please provide your Asphalt game ID for example:  `{p}set_id u-4a5b6c`")
+        return await ctx.send(f"⚠️ Please provide your Asphalt game ID for example:  `{p}set_id u-4a5b6c` ⚠️")
     
     data = load_data()
     user_id = str(ctx.author.id)
@@ -195,11 +195,11 @@ async def set_id(ctx, player_id: str = None):
                 await ctx.author.add_roles(role)
                 role_message = f" & assigned the {role.mention} role!"
             except discord.Forbidden:
-                role_message = f" (⚠️ Failed to assign role: Bot lacks permissions or role is above the bot)."
+                role_message = f" (⚠️ Failed to assign role: Bot lacks permissions or role is above the bot). ⚠️"
             except Exception as e:
-                role_message = f" (⚠️ Failed to assign role: {e})."
+                role_message = f" (⚠️ Failed to assign role: {e}). ⚠️"
         else:
-            role_message = " (⚠️ Configured alert role no longer exists in this server)."
+            role_message = " (⚠️ Configured alert role no longer exists in this server). ⚠️"
     
     await ctx.send(f"✅ Linked Asphalt game ID: **{player_id}** to {ctx.author.mention}{role_message}\n"
                    f"🔔 DM Alerts: {'**ON**' if current_dm_pref else '**OFF**'}")
@@ -208,7 +208,7 @@ async def set_id(ctx, player_id: str = None):
 async def delete_id(ctx):
     """Delete your ID from the system and remove the alert role."""
     if not ctx.guild:
-        return await ctx.send("⚠️ This command can only be used in a server.")
+        return await ctx.send("⚠️ This command can only be used in a server. ⚠️")
         
     data = load_data()
     guild_id = str(ctx.guild.id)
@@ -234,19 +234,19 @@ async def delete_id(ctx):
                     await ctx.author.remove_roles(role)
                     role_message = f" & your **{role.name}** role has been removed."
                 except discord.Forbidden:
-                    role_message = " (⚠️ Bot lacks permissions to remove your server role)."
+                    role_message = " (⚠️ Bot lacks permissions to remove your server role). ⚠️"
                 except Exception:
                     pass
         
         await ctx.send(f"❌ {ctx.author.mention}, your Asphalt game ID has been completely removed{role_message} You will no longer receive notifications or DMs.")
     else:
-        await ctx.send("⚠️ You don't have an Asphalt game ID registered in this server.")
+        await ctx.send("⚠️ You don't have an Asphalt game ID registered in this server. ⚠️")
 
 @bot.command(name="toggle_dm")
 async def toggle_dm(ctx):
     """Toggle code alerts in your DMs."""
     if not ctx.guild:
-        return await ctx.send("⚠️ This command can only be used in a server.")
+        return await ctx.send("⚠️ This command can only be used in a server. ⚠️")
         
     data = load_data()
     guild_id = str(ctx.guild.id)
@@ -255,7 +255,7 @@ async def toggle_dm(ctx):
     if guild_id not in data or user_id not in data[guild_id]:
         config = load_config()
         p = config.get(guild_id, {}).get("prefix", "!")
-        return await ctx.send(f"⚠️ Register your ID first using `{p}set_id YOUR_ID` before changing settings.")
+        return await ctx.send(f"⚠️ Register your ID first using `{p}set_id YOUR_ID` before changing settings. ⚠️")
     
     current_setting = data[guild_id][user_id].get("dm_enabled", True)
     data[guild_id][user_id]["dm_enabled"] = not current_setting
@@ -275,7 +275,7 @@ async def set_admin_role(ctx, role: discord.Role = None):
         config = load_config()
         guild_id = str(ctx.guild.id)
         p = config.get(guild_id, {}).get("prefix", "!")
-        return await ctx.send(f"⚠️ Please mention a role or give an ID. Usage: `{p}setadminrole @RoleName` or `{p}setadminrole 1234567890`")
+        return await ctx.send(f"⚠️ Please mention a role or give an ID. Usage: `{p}setadminrole @RoleName` or `{p}setadminrole 1234567890` ⚠️")
         
     config = load_config()
     guild_id = str(ctx.guild.id)
@@ -286,7 +286,7 @@ async def set_admin_role(ctx, role: discord.Role = None):
     config[guild_id]["bot_admin_role_id"] = role.id
     save_config(config)
     
-    await ctx.send(f"⚙️ **Bot Admin Role Configured!** Members with the role {role.mention} can now use all administrator commands for this bot.")
+    await ctx.send(f"⚙️ **Bot Admin Role Configured!** Members with the role {role.mention} can now use all administrator commands for this bot. ⚙️")
 
 
 @bot.command(name="setprefix")
@@ -294,10 +294,10 @@ async def set_admin_role(ctx, role: discord.Role = None):
 async def set_prefix(ctx, new_prefix: str = None):
     """[Admin] Dynamically alter the script command prefix."""
     if not new_prefix:
-        return await ctx.send("⚠️ Please specify a prefix character for example:  `!setprefix ?`")
+        return await ctx.send("⚠️ Please specify a prefix character for example:  `!setprefix ?` ⚠️")
         
     if len(new_prefix) > 4:
-        return await ctx.send("⚠️ The custom prefix cannot be longer than 4 characters.")
+        return await ctx.send("⚠️ The custom prefix cannot be longer than 4 characters. ⚠️")
         
     config = load_config()
     guild_id = str(ctx.guild.id)
@@ -308,7 +308,7 @@ async def set_prefix(ctx, new_prefix: str = None):
     config[guild_id]["prefix"] = new_prefix
     save_config(config)
     
-    await ctx.send(f"⚙️ **Prefix Changed Successfully!**  From now on, use `{new_prefix}` before all commands in this server.")
+    await ctx.send(f"⚙️ **Prefix Changed Successfully!**  From now on, use `{new_prefix}` before all commands in this server. ⚙️")
 
 @bot.command(name="addchannel")
 @has_admin_or_delegated_role()
@@ -322,7 +322,7 @@ async def add_channel(ctx):
         
     config[guild_id]["notification_channel"] = ctx.channel.id
     save_config(config)
-    await ctx.send(f"📢 **Notification Channel Set!**  All public redeem codes announcements will now be sent to {ctx.channel.mention}.")
+    await ctx.send(f"📢 **Notification Channel Set!**  All public redeem codes announcements will now be sent to {ctx.channel.mention}. 📢")
 
 @bot.command(name="addrole")
 @has_admin_or_delegated_role()
@@ -333,18 +333,18 @@ async def add_role(ctx, role_id: str = None):
     p = config.get(guild_id, {}).get("prefix", "!")
     
     if not role_id or not role_id.isdigit():
-        return await ctx.send(f"⚠️ Please provide a valid numeric Discord Role ID for example:  `{p}addrole 112233445566`")
+        return await ctx.send(f"⚠️ Please provide a valid numeric Discord Role ID for example:  `{p}addrole 112233445566` ⚠️")
     
     role = ctx.guild.get_role(int(role_id))
     if not role:
-        return await ctx.send("❌ Error: Could not find that Role ID in this server.")
+        return await ctx.send("❌ Error: Could not find that Role ID in this server. ❌")
     
     if guild_id not in config:
         config[guild_id] = {}
         
     config[guild_id]["alert_role_id"] = int(role_id)
     save_config(config)
-    await ctx.send(f"🔔 **Alert Role Configured!**  The bot will now ping {role.mention} on every public redeem code drop.")
+    await ctx.send(f"🔔 **Alert Role Configured!**  The bot will now ping {role.mention} on every public redeem code drop. 🔔")
 
 @bot.command(name="clearhistory")
 @has_admin_or_delegated_role()
@@ -356,9 +356,9 @@ async def clear_history(ctx):
     if guild_id in data:
         del data[guild_id]
         save_data(data)
-        await ctx.send("🧹 **Database fully cleared for this server.** All local profiles have been deleted.")
+        await ctx.send("🧹 **Database Cleared! 🧹")
     else:
-        await ctx.send("🧹 **Database is already empty for this server.**")
+        await ctx.send("🧹 **Database Empty** 🧹")
 
 @bot.command(name="listplayers")
 @has_admin_or_delegated_role()
@@ -371,7 +371,7 @@ async def list_players(ctx):
     if not server_data:
         return await ctx.send("🧹 **Server Database Empty** 🧹")
     
-    embed = discord.Embed(title=f"📋 Registered Profiles for {ctx.guild.name}", color=discord.Color.blue())
+    embed = discord.Embed(title=f"__📋 Registered Profiles for {ctx.guild.name}__", color=discord.Color.blue())
     for disc_id, info in server_data.items():
         pref = "✅ Enabled" if info.get("dm_enabled", True) else "❌ Disabled"
         embed.add_field(name=f"User: {info['username']}", value=f"**Game ID: {info['player_id']} | DMs: {pref}**", inline=False)
@@ -389,7 +389,7 @@ async def test_code(ctx):
     if guild_id not in data or user_id not in data[guild_id]:
         config = load_config()
         p = config.get(guild_id, {}).get("prefix", "!")
-        return await ctx.send(f"⚠️ You need to link your own Asphalt game ID with `{p}set_id` in this server first to test this command.")
+        return await ctx.send(f"⚠️ You need to link your own Asphalt game ID with `{p}set_id` in this server first to test this command. ⚠️")
     
     test_code_str = "TEST12345"
     info = data[guild_id][user_id]
@@ -404,16 +404,16 @@ async def test_code(ctx):
     
     try:
         await ctx.author.send(embed=embed)
-        await ctx.send("📥 **Success!**  Sent a test redemption link directly to your DMs.")
+        await ctx.send("📥 **Success!**  Sent a test redemption link directly to your DMs. 📥")
     except discord.Forbidden:
-        await ctx.send("❌ **Error!**  I cannot send you DMs.  Please check your privacy settings for this server.")
+        await ctx.send("❌ **Error!**  I cannot send you DMs.  Please check your privacy settings for this server. ❌")
 
 @bot.command(name="redeem")
 @has_admin_or_delegated_role()
 async def redeem(ctx, code: str = None):
     """[Admin] Announces a code in the designated channel and blasts DM links."""
     if not code:
-        return await ctx.send("⚠️ Please input a redeem code example:  `!redeem RACING2026`")
+        return await ctx.send("⚠️ Please input a redeem code example:  `!redeem RACING2026` ⚠️")
     
     config = load_config()
     guild_id = str(ctx.guild.id)
@@ -422,11 +422,11 @@ async def redeem(ctx, code: str = None):
     
     if not target_channel_id:
         p = config.get(guild_id, {}).get("prefix", "!")
-        return await ctx.send(f"⚠️ No notification channel has been set yet!  Go to your desired channel & type `{p}addchannel` first.")
+        return await ctx.send(f"⚠️ No notification channel has been set yet!  Go to your desired channel & type `{p}addchannel` first. ⚠️")
     
     target_channel = bot.get_channel(target_channel_id)
     if not target_channel:
-        return await ctx.send("⚠️ The configured notification channel could not be found.")
+        return await ctx.send("⚠️ The configured notification channel could not be found. ⚠️")
     
     ping_string = f"<@&{role_id}>" if role_id else "@everyone"
     
