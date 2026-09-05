@@ -154,7 +154,7 @@ async def show_commands(ctx):
     await ctx.send(embed=embed)
 
 
-# --- PLAYER COMMANDS ---
+# --- PLAYER COMMANDS (SERVER-SCOPED) ---
 
 @bot.command(name="set_id")
 async def set_id(ctx, player_id: str = None):
@@ -171,9 +171,14 @@ async def set_id(ctx, player_id: str = None):
     
     data = load_data()
     user_id = str(ctx.author.id)
-    current_dm_pref = data.get(user_id, {}).get("dm_enabled", True)
     
-    data[user_id] = {
+    # Initialize guild database dictionary if it doesn't exist yet
+    if guild_id not in data:
+        data[guild_id] = {}
+        
+    current_dm_pref = data[guild_id].get(user_id, {}).get("dm_enabled", True)
+    
+    data[guild_id][user_id] = {
         "username": ctx.author.name,
         "player_id": player_id,
         "dm_enabled": current_dm_pref
@@ -190,14 +195,14 @@ async def set_id(ctx, player_id: str = None):
                 await ctx.author.add_roles(role)
                 role_message = f" & assigned the {role.mention} role!"
             except discord.Forbidden:
-                role_message = f" (⚠️ Failed to assign role:  Bot lacks permissions or role is above the bot)."
+                role_message = f" (⚠️ Failed to assign role: Bot lacks permissions or role is above the bot)."
             except Exception as e:
                 role_message = f" (⚠️ Failed to assign role: {e})."
         else:
             role_message = " (⚠️ Configured alert role no longer exists in this server)."
     
     await ctx.send(f"✅ Linked Asphalt game ID: **{player_id}** to {ctx.author.mention}{role_message}\n"
-f"🔔 DM Alerts:  {'**ON**' if current_dm_pref else '**OFF**'}")
+                   f"🔔 DM Alerts: {'**ON**' if current_dm_pref else '**OFF**'}")
 
 @bot.command(name="delete_id")
 async def delete_id(ctx):
@@ -206,14 +211,19 @@ async def delete_id(ctx):
         return await ctx.send("⚠️ This command can only be used in a server.")
         
     data = load_data()
+    guild_id = str(ctx.guild.id)
     user_id = str(ctx.author.id)
     
-    if user_id in data:
-        del data[user_id]
+    if guild_id in data and user_id in data[guild_id]:
+        del data[guild_id][user_id]
+        
+        # Clean up empty server dictionaries to keep file tidy
+        if not data[guild_id]:
+            del data[guild_id]
+            
         save_data(data)
         
         config = load_config()
-        guild_id = str(ctx.guild.id)
         role_id = config.get(guild_id, {}).get("alert_role_id")
         role_message = ""
         
@@ -230,29 +240,32 @@ async def delete_id(ctx):
         
         await ctx.send(f"❌ {ctx.author.mention}, your Asphalt game ID has been completely removed{role_message} You will no longer receive notifications or DMs.")
     else:
-        await ctx.send("⚠️ You don't have an Asphalt game ID registered.")
+        await ctx.send("⚠️ You don't have an Asphalt game ID registered in this server.")
 
 @bot.command(name="toggle_dm")
 async def toggle_dm(ctx):
     """Toggle code alerts in your DMs."""
+    if not ctx.guild:
+        return await ctx.send("⚠️ This command can only be used in a server.")
+        
     data = load_data()
+    guild_id = str(ctx.guild.id)
     user_id = str(ctx.author.id)
     
-    if user_id not in data:
+    if guild_id not in data or user_id not in data[guild_id]:
         config = load_config()
-        guild_id = str(ctx.guild.id) if ctx.guild else "default"
-        p = config.get(guild_id, {}).get("prefix", "!") if ctx.guild else "!"
+        p = config.get(guild_id, {}).get("prefix", "!")
         return await ctx.send(f"⚠️ Register your ID first using `{p}set_id YOUR_ID` before changing settings.")
     
-    current_setting = data[user_id].get("dm_enabled", True)
-    data[user_id]["dm_enabled"] = not current_setting
+    current_setting = data[guild_id][user_id].get("dm_enabled", True)
+    data[guild_id][user_id]["dm_enabled"] = not current_setting
     save_data(data)
     
-    status = "ON" if data[user_id]["dm_enabled"] else "OFF"
+    status = "ON" if data[guild_id][user_id]["dm_enabled"] else "OFF"
     await ctx.send(f"🔔 DM code alerts are now **{status}** for {ctx.author.mention}.")
 
 
-# --- ADMIN COMMANDS ---
+# --- ADMIN COMMANDS (SERVER-SCOPED) ---
 
 @bot.command(name="setadminrole")
 @commands.has_permissions(administrator=True) # Strictly kept to server admins only
@@ -336,20 +349,30 @@ async def add_role(ctx, role_id: str = None):
 @bot.command(name="clearhistory")
 @has_admin_or_delegated_role()
 async def clear_history(ctx):
-    """[Admin] Wipe out the entire player database."""
-    save_data({})
-    await ctx.send("🧹 **Database fully cleared.**  All player profiles & registered Asphalt game IDs have been deleted globally.")
+    """[Admin] Wipe out the player database for THIS server only."""
+    data = load_data()
+    guild_id = str(ctx.guild.id)
+    
+    if guild_id in data:
+        del data[guild_id]
+        save_data(data)
+        await ctx.send("🧹 **Database fully cleared for this server.** All local profiles have been deleted.")
+    else:
+        await ctx.send("🧹 **Database is already empty for this server.**")
 
 @bot.command(name="listplayers")
 @has_admin_or_delegated_role()
 async def list_players(ctx):
-    """[Admin] View database profiles."""
+    """[Admin] View database profiles for this server."""
     data = load_data()
-    if not data:
-        return await ctx.send("🧹 **Database Empty** 🧹")
+    guild_id = str(ctx.guild.id)
+    server_data = data.get(guild_id, {})
     
-    embed = discord.Embed(title="📋 Registered Profiles", color=discord.Color.blue())
-    for disc_id, info in data.items():
+    if not server_data:
+        return await ctx.send("🧹 **Server Database Empty** 🧹")
+    
+    embed = discord.Embed(title=f"📋 Registered Profiles for {ctx.guild.name}", color=discord.Color.blue())
+    for disc_id, info in server_data.items():
         pref = "✅ Enabled" if info.get("dm_enabled", True) else "❌ Disabled"
         embed.add_field(name=f"User: {info['username']}", value=f"**Game ID: {info['player_id']} | DMs: {pref}**", inline=False)
         
@@ -360,22 +383,21 @@ async def list_players(ctx):
 async def test_code(ctx):
     """[Admin] Test command to verify DM formatting."""
     data = load_data()
+    guild_id = str(ctx.guild.id)
     user_id = str(ctx.author.id)
     
-    if user_id not in data:
+    if guild_id not in data or user_id not in data[guild_id]:
         config = load_config()
-        guild_id = str(ctx.guild.id)
         p = config.get(guild_id, {}).get("prefix", "!")
-        return await ctx.send(f"⚠️ You need to link your own Asphalt game ID with `{p}set_id` first to test this command.")
+        return await ctx.send(f"⚠️ You need to link your own Asphalt game ID with `{p}set_id` in this server first to test this command.")
     
     test_code_str = "TEST12345"
-    info = data[user_id]
+    info = data[guild_id][user_id]
     prefilled_url = f"https://www.gameloft.com/redeem/asphalt-legends?playerId={info['player_id']}&code={test_code_str}"
     
     embed = discord.Embed(
         title="🧪 Admin Test Redeem Code Delivery 🧪",
-        description=f"Testing code delivery script.\n"
-f"**Redeem Code:** `{test_code_str}`",
+        description=f"Testing code delivery script.\n\n**Redeem Code:** `{test_code_str}`",
         color=discord.Color.orange()
     )
     embed.add_field(name="__Your Pre-filled Portal Link__", value=f"[Click Here to open your portal!]({prefilled_url})")
@@ -407,7 +429,10 @@ async def redeem(ctx, code: str = None):
         return await ctx.send("⚠️ The configured notification channel could not be found.")
     
     ping_string = f"<@&{role_id}>" if role_id else "@everyone"
+    
+    # Grab data strictly scoped to this server
     data = load_data()
+    server_data = data.get(guild_id, {})
     
     public_embed = discord.Embed(
         title="🏎️ __New Asphalt Legends Redeem Code Released!__ 🏎️",
@@ -427,14 +452,14 @@ f"**Redeem Code:** `{code.upper()}`",
     if ctx.channel.id != target_channel_id:
         await ctx.send(f"✅ Redeem code broadcasted publicly in {target_channel.mention} & processing player DMs...")
     
-    if not data:
+    if not server_data:
         return
 
     success_count = 0
     opt_out_count = 0
     fail_count = 0
     
-    for user_id, info in data.items():
+    for user_id, info in server_data.items():
         if not info.get("dm_enabled", True):
             opt_out_count += 1
             continue
@@ -459,7 +484,7 @@ f"Click below to open the portal with your Asphalt game ID filled out!",
         else:
             fail_count += 1
             
-    print(f"📊 Delivery Report for code {code.upper()}: Delivered: {success_count} | Opted Out: {opt_out_count} | Failed: {fail_count}")
+    print(f"📊 Delivery Report for server {ctx.guild.name} ({guild_id}): Delivered: {success_count} | Opted Out: {opt_out_count} | Failed: {fail_count}")
 
 
 # Error handler for permission blocks
