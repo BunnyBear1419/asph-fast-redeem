@@ -94,12 +94,9 @@ async def show_commands(ctx):
     embed.add_field(
         name="👤 Player Commands 👤",
         value=(
-            f"`{p}set_id <your_id>` - Registers your unique Asphalt game ID.
-"
-            f"`{p}toggle_dm` - Turn direct message redeem code notifications ON/OFF.
-"
-            f"`{p}delete_id` - Completely removes your Asphalt game ID from the bot so you will get no more notifications or DMs.
-"
+            f"`{p}set_id <your_id>` - Registers your unique Asphalt game ID.\n"
+            f"`{p}toggle_dm` - Turn direct message redeem code notifications ON/OFF.\n"
+            f"`{p}delete_id` - Completely removes your Asphalt game ID from the bot so you will get no more notifications or DMs.\n"
             f"`{p}commands` - Displays this help box with list of all commands for users & admins."
         ),
         inline=False
@@ -110,18 +107,12 @@ async def show_commands(ctx):
         embed.add_field(
             name="🛠️ Administrator Tools 🛠️",
             value=(
-                f"`{p}setprefix <new_prefix>` - Changes the command prefix to whatever you want.
-"
-                f"`{p}addchannel` - Sets the current channel for all redeem code announcements.
-"
-                f"`{p}addrole <role_id>` - Links a specific role ID to be pinged during redeem drops.
-"
-                f"`{p}redeem <code>` - Sends the alert to the designated channel & DMs active players.
-"
-                f"`{p}listplayers` - Displays a list of all players who added their Asphalt game ID.
-"
-                f"`{p}test_code` - Dispatches a mockup test portal URL to your own DMs.
-"
+                f"`{p}setprefix <new_prefix>` - Changes the command prefix to whatever you want.\n"
+                f"`{p}addchannel` - Sets the current channel for all redeem code announcements.\n"
+                f"`{p}addrole <role_id>` - Links a specific role ID to be pinged during redeem drops.\n"
+                f"`{p}redeem <code>` - Sends the alert to the designated channel & DMs active players.\n"
+                f"`{p}listplayers` - Displays a list of all players who added their Asphalt game ID.\n"
+                f"`{p}test_code` - Dispatches a mockup test portal URL to your own DMs.\n"
                 f"`{p}clearhistory` - Instantly wipes out the entire user registration database."
             ),
             inline=False
@@ -175,8 +166,8 @@ async def set_id(ctx, player_id: str = None):
             role_message = " (⚠️ Configured alert role no longer exists in this server)."
     # ---------------------------------
     
-    await ctx.send(f"✅ Linked Asphalt game ID: **{player_id}** to {ctx.author.mention}{role_message}
-🔔 DM Alerts:  {'**ON**' if current_dm_pref else '**OFF**'}")
+    await ctx.send(f"✅ Linked Asphalt game ID: **{player_id}** to {ctx.author.mention}{role_message}\n"
+f"🔔 DM Alerts:  {'**ON**' if current_dm_pref else '**OFF**'}")
 
 @bot.command(name="delete_id")
 async def delete_id(ctx):
@@ -333,8 +324,8 @@ async def test_code(ctx):
     
     embed = discord.Embed(
         title="🧪 Admin Test Redeem Code Delivery 🧪",
-        description=f"Testing code delivery script.
-**Redeem Code:** `{test_code_str}`",
+        description=f"Testing code delivery script.\n"
+f"**Redeem Code:** `{test_code_str}`",
         color=discord.Color.orange()
     )
     embed.add_field(name="__Your Pre-filled Portal Link__", value=f"[Click Here to open your portal!]({prefilled_url})")
@@ -370,9 +361,8 @@ async def redeem(ctx, code: str = None):
     
     public_embed = discord.Embed(
         title="🏎️ __New Asphalt Legends Redeem Code Released!__ 🏎️",
-        description=f"🚨 New global redeem code is active! 🚨
-
-**Redeem Code:** `{code.upper()}`",
+        description=f"🚨 New global redeem code is active! 🚨\n\n"
+f"**Redeem Code:** `{code.upper()}`",
         color=discord.Color.gold()
     )
     public_embed.add_field(
@@ -405,9 +395,8 @@ async def redeem(ctx, code: str = None):
             
             dm_embed = discord.Embed(
                 title="🏁 Your Custom Fast-Redeem Link 🏁",
-                description=f"**Code:** `{code.upper()}`
-
-Click below to open the portal with your Asphalt game ID filled out!",
+                description=f"**Code:** `{code.upper()}`\n\n"
+f"Click below to open the portal with your Asphalt game ID filled out!",
                 color=discord.Color.green()
             )
             dm_embed.add_field(name="__Your Pre-filled Portal Link__", value=f"[Click here to claim rewards Now]({prefilled_url})")
