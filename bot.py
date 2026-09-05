@@ -26,7 +26,6 @@ threading.Thread(target=run_web_server, daemon=True).start()
 # -----------------------------------------------
 
 # MULTI-SERVER PATH RESTRUCTURE
-# Changed from LOCALAPPDATA to standard project directories for seamless cross-platform cloud hosting compatibility.
 DB_FILE = "asphalt_bot_database.json"
 CONFIG_FILE = "asphalt_bot_config.json"
 
@@ -63,6 +62,28 @@ def get_prefix(bot, message):
     config = load_config()
     guild_id = str(message.guild.id)
     return config.get(guild_id, {}).get("prefix", "!")
+
+# CUSTOM CHECK FOR ADMIN OR SPECIAL DELEGATED ROLE
+def has_admin_or_delegated_role():
+    async def predicate(ctx):
+        if not ctx.guild:
+            return False
+        # Server Administrators always pass
+        if ctx.author.guild_permissions.administrator:
+            return True
+        
+        # Check if a delegated admin role is set in config
+        config = load_config()
+        guild_id = str(ctx.guild.id)
+        delegated_role_id = config.get(guild_id, {}).get("bot_admin_role_id")
+        
+        if delegated_role_id:
+            # Check if user has the assigned bot admin role
+            if discord.utils.get(ctx.author.roles, id=int(delegated_role_id)):
+                return True
+                
+        raise commands.MissingPermissions(["administrator (or delegated bot admin role)"])
+    return commands.check(predicate)
 
 # Set up intents and dynamically hook prefix getter
 intents = discord.Intents.default()
@@ -102,11 +123,22 @@ async def show_commands(ctx):
         inline=False
     )
     
+    # Check if they have admin authorization to dynamically clean up/show the tools box
+    is_authorized = False
+    if ctx.guild:
+        if ctx.author.guild_permissions.administrator:
+            is_authorized = True
+        else:
+            delegated_id = config.get(str(ctx.guild.id), {}).get("bot_admin_role_id")
+            if delegated_id and discord.utils.get(ctx.author.roles, id=int(delegated_id)):
+                is_authorized = True
+
     # Admin Section
-    if ctx.guild and ctx.author.guild_permissions.administrator:
+    if is_authorized:
         embed.add_field(
             name="🛠️ Administrator Tools 🛠️",
             value=(
+                f"`{p}setadminrole <role>` - Sets a role that can also use admin bot commands.\n"
                 f"`{p}setprefix <new_prefix>` - Changes the command prefix to whatever you want.\n"
                 f"`{p}addchannel` - Sets the current channel for all redeem code announcements.\n"
                 f"`{p}addrole <role_id>` - Links a specific role ID to be pinged during redeem drops.\n"
@@ -148,7 +180,6 @@ async def set_id(ctx, player_id: str = None):
     }
     save_data(data)
     
-    # --- AUTOMATIC ROLE ASSIGNMENT ---
     role_id = config.get(guild_id, {}).get("alert_role_id")
     role_message = ""
     
@@ -164,7 +195,6 @@ async def set_id(ctx, player_id: str = None):
                 role_message = f" (⚠️ Failed to assign role: {e})."
         else:
             role_message = " (⚠️ Configured alert role no longer exists in this server)."
-    # ---------------------------------
     
     await ctx.send(f"✅ Linked Asphalt game ID: **{player_id}** to {ctx.author.mention}{role_message}\n"
 f"🔔 DM Alerts:  {'**ON**' if current_dm_pref else '**OFF**'}")
@@ -182,7 +212,6 @@ async def delete_id(ctx):
         del data[user_id]
         save_data(data)
         
-        # --- AUTOMATIC ROLE REMOVAL ---
         config = load_config()
         guild_id = str(ctx.guild.id)
         role_id = config.get(guild_id, {}).get("alert_role_id")
@@ -198,7 +227,6 @@ async def delete_id(ctx):
                     role_message = " (⚠️ Bot lacks permissions to remove your server role)."
                 except Exception:
                     pass
-        # ------------------------------
         
         await ctx.send(f"❌ {ctx.author.mention}, your Asphalt game ID has been completely removed{role_message} You will no longer receive notifications or DMs.")
     else:
@@ -226,8 +254,30 @@ async def toggle_dm(ctx):
 
 # --- ADMIN COMMANDS ---
 
+@bot.command(name="setadminrole")
+@commands.has_permissions(administrator=True) # Strictly kept to server admins only
+async def set_admin_role(ctx, role: discord.Role = None):
+    """[Server Admin Only] Set a role that can also use admin bot commands."""
+    if not role:
+        config = load_config()
+        guild_id = str(ctx.guild.id)
+        p = config.get(guild_id, {}).get("prefix", "!")
+        return await ctx.send(f"⚠️ Please mention a role or give an ID. Usage: `{p}setadminrole @RoleName` or `{p}setadminrole 1234567890`")
+        
+    config = load_config()
+    guild_id = str(ctx.guild.id)
+    
+    if guild_id not in config:
+        config[guild_id] = {}
+        
+    config[guild_id]["bot_admin_role_id"] = role.id
+    save_config(config)
+    
+    await ctx.send(f"⚙️ **Bot Admin Role Configured!** Members with the role {role.mention} can now use all administrator commands for this bot.")
+
+
 @bot.command(name="setprefix")
-@commands.has_permissions(administrator=True)
+@has_admin_or_delegated_role()
 async def set_prefix(ctx, new_prefix: str = None):
     """[Admin] Dynamically alter the script command prefix."""
     if not new_prefix:
@@ -248,7 +298,7 @@ async def set_prefix(ctx, new_prefix: str = None):
     await ctx.send(f"⚙️ **Prefix Changed Successfully!**  From now on, use `{new_prefix}` before all commands in this server.")
 
 @bot.command(name="addchannel")
-@commands.has_permissions(administrator=True)
+@has_admin_or_delegated_role()
 async def add_channel(ctx):
     """[Admin] Set this channel as the designated bot notification channel."""
     config = load_config()
@@ -262,7 +312,7 @@ async def add_channel(ctx):
     await ctx.send(f"📢 **Notification Channel Set!**  All public redeem codes announcements will now be sent to {ctx.channel.mention}.")
 
 @bot.command(name="addrole")
-@commands.has_permissions(administrator=True)
+@has_admin_or_delegated_role()
 async def add_role(ctx, role_id: str = None):
     """[Admin] Configure a specific Role ID to be pinged on code drops."""
     config = load_config()
@@ -284,14 +334,14 @@ async def add_role(ctx, role_id: str = None):
     await ctx.send(f"🔔 **Alert Role Configured!**  The bot will now ping {role.mention} on every public redeem code drop.")
 
 @bot.command(name="clearhistory")
-@commands.has_permissions(administrator=True)
+@has_admin_or_delegated_role()
 async def clear_history(ctx):
     """[Admin] Wipe out the entire player database."""
     save_data({})
     await ctx.send("🧹 **Database fully cleared.**  All player profiles & registered Asphalt game IDs have been deleted globally.")
 
 @bot.command(name="listplayers")
-@commands.has_permissions(administrator=True)
+@has_admin_or_delegated_role()
 async def list_players(ctx):
     """[Admin] View database profiles."""
     data = load_data()
@@ -306,7 +356,7 @@ async def list_players(ctx):
     await ctx.send(embed=embed)
 
 @bot.command(name="test_code")
-@commands.has_permissions(administrator=True)
+@has_admin_or_delegated_role()
 async def test_code(ctx):
     """[Admin] Test command to verify DM formatting."""
     data = load_data()
@@ -337,7 +387,7 @@ f"**Redeem Code:** `{test_code_str}`",
         await ctx.send("❌ **Error!**  I cannot send you DMs.  Please check your privacy settings for this server.")
 
 @bot.command(name="redeem")
-@commands.has_permissions(administrator=True)
+@has_admin_or_delegated_role()
 async def redeem(ctx, code: str = None):
     """[Admin] Announces a code in the designated channel and blasts DM links."""
     if not code:
@@ -420,7 +470,6 @@ async def on_command_error(ctx, error):
 
 # --- SECURE TOKEN RUNNER (WITH LOCAL FALLBACK) ---
 config = load_config()
-# Pulled via environment variable fallback for hosting environments
 token = os.environ.get("DISCORD_BOT_TOKEN", "")
 
 if not token:
