@@ -455,7 +455,7 @@ async def admin_restore_slash(interaction: discord.Interaction):
             seen_users.add(u_id)
             await loop.run_in_executor(None, lambda: supabase.table("player_profiles").upsert({"guild_id": guild_id, "user_id": u_id, "username": row["username"], "player_id": row["player_id"], "dm_enabled": row["dm_enabled"]}).execute())
             restored_count += 1
-    await interaction.followup.send(f"🟢 Sync checked! Restored `{restored_count}` player profile entry cards successfully!", ephemeral=True)
+            await interaction.followup.send(f"🟢 Sync checked! Restored `{restored_count}` player profile entry cards successfully!", ephemeral=True)
 
 token = os.environ.get("DISCORD_BOT_TOKEN", "")
 if not token and os.path.exists("token.txt"):
