@@ -12,6 +12,7 @@ import aiohttp
 import random
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
+import socketserver
 from pymongo import MongoClient, DESCENDING
 import pymongo
 # ==============================================================================
@@ -27,29 +28,31 @@ class KeepAliveHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         return
 
+class ResilientHTTPServer(HTTPServer):
+    # Explicitly enforce socket address reuse parameters to clear locks fast
+    allow_reuse_address = True
 def run_web_server():
-    server = HTTPServer(("0.0.0.0", 10000), KeepAliveHandler)
-    server.serve_forever()
+    try:
+        server = ResilientHTTPServer(("0.0.0.0", 10000), KeepAliveHandler)
+        server.serve_forever()
+    except OSError as e:
+        # Gracefully handle port overlaps without breaking the boot thread
+        print(f"⚠️ Web Infrastructure Note (Port 10000 busy): {e}. Proceeding smoothly.")
 
 threading.Thread(target=run_web_server, daemon=True).start()
 # ==============================================================================
-# SECTION 2: WEB INFRASTRUCTURE BACKGROUND RECEPTACLE
+# SECTION 3: SYSTEM SEARCH INTERFACES & EXCLUSIONS
 # ==============================================================================
-class KeepAliveHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.send_header("Content-type", "text/plain")
-        self.end_headers()
-        self.wfile.write(b"Bot connection nodes active!")
-        
-    def log_message(self, format, *args):
-        return
+CODE_PATTERN = re.compile(r'\b[A-Za-z0-9_-]{6,16}\b')
 
-def run_web_server():
-    server = HTTPServer(("0.0.0.0", 10000), KeepAliveHandler)
-    server.serve_forever()
+BLACKLISTED_WORDS = {
+    "REDEEM", "TOKENS", "CREDITS", "ASPHALT", "UNITE", 
+    "REDDIT", "PLAYER", "NINTENDO", "XBOX", "PLAYSTATION",
+    "WORKING", "PROMO", "REWARD", "CODES", "DISCORD", "SERVER"
+}
 
-threading.Thread(target=run_web_server, daemon=True).start()
+DEFAULT_BANNER = "https://imgur.com"
+DEFAULT_THUMBNAIL = "https://imgur.com"
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
@@ -110,9 +113,8 @@ class HelpDropdown(discord.ui.Select):
             banner = cfg_res.get("banner_url", DEFAULT_BANNER)
             thumb = cfg_res.get("thumbnail_url", DEFAULT_THUMBNAIL)
 
-        selected_value = self.values[0] if self.values else ""
-        embed = discord.Embed(title="Error", description="Unknown partition route selection parameters.")
-        
+        selected_value = self.values if self.values else ""
+        embed = discord.Embed(title="Error", description="Unknown partition route parameters.")
         if selected_value == "overview":
             embed = discord.Embed(title="🤖 Asphalt Legends Fast Redeem Manual", description="Automated drops processing layout matrix.", color=discord.Color.from_rgb(14, 21, 46))
             embed.set_image(url=banner)
@@ -154,7 +156,7 @@ async def auto_code_scraper_loop():
                             search_blob = f"{p_data.get('title', '')} {p_data.get('selftext', '')}".upper()
                             await process_text_and_blast(search_blob)
             except Exception as e:
-                print(f"⚠️ Reddit scraping skip node event: {e}")
+                print(f"⚠️ Reddit tracking delay event exception: {e}")
             await asyncio.sleep(2)
         try:
             gameloft_url = "https://asphaltlegends.com"
@@ -216,7 +218,7 @@ async def execute_global_automation_blast(code: str):
         if not target_channel:
             continue
             
-        # Zero-Clutter Channel Anti-Spam Clean Routine
+        # Zero-Clutter Channel Clearing logic: delete the previous alert automatically
         prev_msg_id = guild_cfg.get("last_notification_message_id")
         if prev_msg_id:
             try:
@@ -227,14 +229,13 @@ async def execute_global_automation_blast(code: str):
 
         player_role_id = guild_cfg.get("alert_role_id")
         ping_string = f"<@&{player_role_id}>" if player_role_id else "@everyone"
-        
-        # Sleek Official Game Dark Navy Layout Branding Scheme Block
         public_embed = discord.Embed(
             title="🏁 OFFICIAL ASPHALT LEGENDS UNITE REDEEM CODE 🏁",
             description=f"A new universal rewards voucher has been deployed!\n\n**PROMO CODE:**\n```📬 {code.upper()} ```\n\n[Launch Official Redeem Portal](https://asphaltlegendsunite.com)",
             color=discord.Color.from_rgb(14, 21, 46)
         )
         public_embed.set_image(url=guild_cfg.get("banner_url", DEFAULT_BANNER))
+        
         try:
             sent_msg = await target_channel.send(content=ping_string, embed=public_embed)
             await loop.run_in_executor(None, lambda: guild_config_col.update_one(
@@ -365,6 +366,7 @@ async def history_slash(interaction: discord.Interaction):
         manual_url = f"https://asphaltlegendsunite.com{code}"
         embed.add_field(name=f"{idx}. Code: `{code}`", value=f"🔗 [Claim Shortcut Link]({manual_url})", inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
+
 @bot.tree.command(name="setup", description="Configure the channel and specific target roles.")
 @is_admin_or_delegated()
 async def setup_slash(interaction: discord.Interaction, announcement_channel: discord.TextChannel, admin_role: discord.Role, player_role: discord.Role):
@@ -380,7 +382,6 @@ async def setup_slash(interaction: discord.Interaction, announcement_channel: di
         upsert=True
     ))
     await interaction.response.send_message("⚙️ Setup matrix configuration nodes saved directly to cloud tables rows checked successfully!")
-
 @bot.tree.command(name="diagnose", description="🛡️ Admin Tool: Runs an interactive system diagnostic stability health check.")
 @is_admin_or_delegated()
 async def diagnose_slash(interaction: discord.Interaction):
@@ -416,6 +417,7 @@ async def listplayers_slash(interaction: discord.Interaction):
     for info in server_res:
         embed.add_field(name=f"User: {info['username']}", value=f"🆔 Game ID: `{info['player_id']}`", inline=False)
     await interaction.response.send_message(embed=embed)
+
 @bot.tree.command(name="redeem", description="Manual broadcast blast distribution channels operations logs.")
 @is_admin_or_delegated()
 async def redeem_slash(interaction: discord.Interaction, code: str):
@@ -472,6 +474,7 @@ async def admin_reset_defaults_slash(interaction: discord.Interaction):
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, lambda: guild_config_col.update_one({"guild_id": guild_id}, {"$set": {"banner_url": DEFAULT_BANNER, "thumbnail_url": DEFAULT_THUMBNAIL}}))
     await interaction.response.send_message("🧹 Overrides dropped. Original themes parameters re-enabled successfully traces checks logged!")
+
 class ConfirmClearHistoryView(discord.ui.View):
     def __init__(self, author: discord.Member, guild_id: str):
         super().__init__(timeout=60)
@@ -530,7 +533,4 @@ async def admin_restore_slash(interaction: discord.Interaction):
 
 token = os.environ.get("DISCORD_BOT_TOKEN", "")
 if not token and os.path.exists("token.txt"):
-    with open("token.txt", "r", encoding="utf-8") as tf: token = tf.read().strip()
-
-if not token or token == "YOUR_TOKEN_HERE": print("❌ ERROR: Missing credential keys mapping token configurations variables.")
-else: bot.run(token)
+with open("token.txt", "r", encoding="utf-8") as tf: token = tf.read().strip()if not token or token == "YOUR_TOKEN_HERE": print("❌ ERROR: Missing credential keys mapping token configurations variables.")else: bot.run(token)
