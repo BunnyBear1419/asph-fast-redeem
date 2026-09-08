@@ -292,7 +292,7 @@ async def set_id_slash(interaction: discord.Interaction, player_id: str):
             except discord.Forbidden: pass
                 
     dm_status_str = "ON" if current_dm_pref else "OFF"
-    await interaction.response.send_message(f"✅ Linked Asphalt ID: **{player_id}**
+    await interaction.response.send_message(f"✅ Linked Asphalt ID: **{player_id}**")
 🔔 DM Alerts: **{dm_status_str}**")
 
 @bot.tree.command(name="delete_id", description="Removes your game registration metadata profile completely.")
