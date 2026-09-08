@@ -33,7 +33,7 @@ threading.Thread(target=run_web_server, daemon=True).start()
 # ==============================================================================
 # SECTION 3: SYSTEM SEARCH INTERFACES & EXCLUSIONS
 # ==============================================================================
-CODE_PATTERN = re.compile(r'\b[A-Z0-9]{6,14}\b')
+CODE_PATTERN = re.compile(r'\\b[A-Z0-9]{6,14}\\b')
 
 BLACKLISTED_WORDS = {
     "REDEEM", "TOKENS", "CREDITS", "ASPHALT", "UNITE", 
@@ -291,7 +291,8 @@ async def set_id_slash(interaction: discord.Interaction, player_id: str):
             try: await interaction.user.add_roles(role)
             except discord.Forbidden: pass
                 
-    await interaction.response.send_message(f"✅ Linked Asphalt ID: **{player_id}**\n🔔 DM Alerts: {'**ON**' if current_dm_pref else '**OFF**'}")
+    await interaction.response.send_message(f"✅ Linked Asphalt ID: **{player_id}**
+🔔 DM Alerts: {'**ON**' if current_dm_pref else '**OFF**'}")
 
 @bot.tree.command(name="delete_id", description="Removes your game registration metadata profile completely.")
 async def delete_id_slash(interaction: discord.Interaction):
@@ -358,14 +359,28 @@ async def setup_slash(interaction: discord.Interaction, announcement_channel: di
 async def diagnose_slash(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     guild_id = str(interaction.guild_id)
+    
+    # 1. Test Discord WebSocket Latency
     latency = round(bot.latency * 1000)
     
     loop = asyncio.get_event_loop()
-    prof_count = await loop.run_in_executor(None, lambda: player_profiles_col.count_documents({"guild_id": guild_id}))
     
+    # 2. Test MongoDB Live Connection & Database Count
+    mongo_status = "🟢 Connected"
+    try:
+        # Run the official ping command to verify the connection is active and authenticated
+        await loop.run_in_executor(None, lambda: db.command("ping"))
+        prof_count = await loop.run_in_executor(None, lambda: player_profiles_col.count_documents({"guild_id": guild_id}))
+    except Exception as e:
+        mongo_status = f"🔴 Connection Failed: {str(e)[:50]}"
+        prof_count = "N/A"
+
+    # 3. Build & Send Diagnostics Embed
     embed = discord.Embed(title="🛡️ System Diagnostics Status", color=discord.Color.from_rgb(30, 140, 200))
     embed.add_field(name="Satellite Delay Latency", value=f"`{latency}ms`", inline=True)
+    embed.add_field(name="MongoDB Connection Status", value=f"`{mongo_status}`", inline=True)
     embed.add_field(name="MongoDB Cloud Online Vaults", value=f"`{prof_count} Live Entries`", inline=False)
+    
     await interaction.followup.send(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="listplayers", description="Displays membership profiling matrix manifest lists.")
