@@ -103,7 +103,7 @@ class HelpDropdown(discord.ui.Select):
             banner = cfg_res.get("banner_url", DEFAULT_BANNER)
             thumb = cfg_res.get("thumbnail_url", DEFAULT_THUMBNAIL)
 
-        selected_value = self.values if self.values else ""
+        selected_value = self.values[0] if self.values else ""
         embed = discord.Embed(title="Error", description="Unknown partition route selection parameters.")
         if selected_value == "overview":
             embed = discord.Embed(title="🤖 Asphalt Legends Fast Redeem Manual", description="Automated drops processing layout matrix.", color=discord.Color.from_rgb(20, 24, 40))
@@ -292,8 +292,7 @@ async def set_id_slash(interaction: discord.Interaction, player_id: str):
             except discord.Forbidden: pass
                 
     dm_status_str = "ON" if current_dm_pref else "OFF"
-    await interaction.response.send_message(f"✅ Linked Asphalt ID: **{player_id}**")
-🔔 DM Alerts: **{dm_status_str}**")
+    await interaction.response.send_message(f"✅ Linked Asphalt ID: **{player_id}**\n🔔 DM Alerts: **{dm_status_str}**")
 
 @bot.tree.command(name="delete_id", description="Removes your game registration metadata profile completely.")
 async def delete_id_slash(interaction: discord.Interaction):
@@ -361,7 +360,7 @@ async def diagnose_slash(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     guild_id = str(interaction.guild_id)
     
-    latency = round(bot.latency * 1000)
+    latency = round(bot.latency * 1000) if bot.latency and not re.match(r'inf|nan', str(bot.latency), re.IGNORECASE) else 0
     loop = asyncio.get_event_loop()
     
     mongo_status = "🟢 Connected"
