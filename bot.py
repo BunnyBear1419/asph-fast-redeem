@@ -13,6 +13,7 @@ import random
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pymongo import MongoClient, DESCENDING
+import pymongo
 # ==============================================================================
 # SECTION 2: WEB INFRASTRUCTURE BACKGROUND RECEPTACLE
 # ==============================================================================
@@ -32,19 +33,23 @@ def run_web_server():
 
 threading.Thread(target=run_web_server, daemon=True).start()
 # ==============================================================================
-# SECTION 3: SYSTEM SEARCH INTERFACES & EXCLUSIONS
+# SECTION 2: WEB INFRASTRUCTURE BACKGROUND RECEPTACLE
 # ==============================================================================
-CODE_PATTERN = re.compile(r'\b[A-Za-z0-9_-]{6,16}\b')
+class KeepAliveHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"Bot connection nodes active!")
+        
+    def log_message(self, format, *args):
+        return
 
-BLACKLISTED_WORDS = {
-    "REDEEM", "TOKENS", "CREDITS", "ASPHALT", "UNITE", 
-    "REDDIT", "PLAYER", "NINTENDO", "XBOX", "PLAYSTATION",
-    "WORKING", "PROMO", "REWARD", "CODES", "DISCORD", "SERVER"
-}
+def run_web_server():
+    server = HTTPServer(("0.0.0.0", 10000), KeepAliveHandler)
+    server.serve_forever()
 
-DEFAULT_BANNER = "https://imgur.com"
-DEFAULT_THUMBNAIL = "https://imgur.com"
-
+threading.Thread(target=run_web_server, daemon=True).start()
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
@@ -94,14 +99,10 @@ class HelpDropdown(discord.ui.Select):
             options.append(discord.SelectOption(label="🛡️ Admin Utilities", value="admin", description="Admin workbench mapping"))
             
         super().__init__(placeholder="Select system segment...", min_values=1, max_values=1, options=options)
-        
     async def callback(self, interaction: discord.Interaction):
         guild_id = str(interaction.guild_id)
-        
         loop = asyncio.get_event_loop()
-        cfg_res = await loop.run_in_executor(
-            None, lambda: guild_config_col.find_one({"guild_id": guild_id})
-        )
+        cfg_res = await loop.run_in_executor(None, lambda: guild_config_col.find_one({"guild_id": guild_id}))
         
         banner = DEFAULT_BANNER
         thumb = DEFAULT_THUMBNAIL
@@ -111,18 +112,17 @@ class HelpDropdown(discord.ui.Select):
 
         selected_value = self.values[0] if self.values else ""
         embed = discord.Embed(title="Error", description="Unknown partition route selection parameters.")
+        
         if selected_value == "overview":
-            embed = discord.Embed(title="🤖 Asphalt Legends Fast Redeem Manual", description="Automated drops processing layout matrix.", color=discord.Color.from_rgb(20, 24, 40))
+            embed = discord.Embed(title="🤖 Asphalt Legends Fast Redeem Manual", description="Automated drops processing layout matrix.", color=discord.Color.from_rgb(14, 21, 46))
             embed.set_image(url=banner)
             embed.add_field(name="✨ Key Framework", value="• Register your player ID via `/set_id` to get custom links inside your DMs automatically!", inline=False)
-            
         elif selected_value == "player":
-            embed = discord.Embed(title="🕹️ Player Commands Matrix", color=discord.Color.from_rgb(24, 40, 20))
+            embed = discord.Embed(title="🕹️ Player Commands Matrix", color=discord.Color.from_rgb(14, 21, 46))
             embed.set_thumbnail(url=thumb)
             embed.add_field(name="`/set_id` | `/toggle_dm` | `/delete_id` | `/history`", value="Standard player infrastructure tools map utilities.", inline=False)
-            
         elif selected_value == "admin":
-            embed = discord.Embed(title="⚙️ Administrator Utilities Manual", color=discord.Color.from_rgb(45, 15, 15))
+            embed = discord.Embed(title="⚙️ Administrator Utilities Manual", color=discord.Color.from_rgb(14, 21, 46))
             embed.set_thumbnail(url=thumb)
             embed.add_field(name="`/setup` | `/redeem` | `/listplayers` | `/diagnose` | `/admin_restore`", value="Master administration commands module workspace console tools.", inline=False)
 
@@ -138,13 +138,11 @@ class HelpView(discord.ui.View):
 @tasks.loop(minutes=5)
 async def auto_code_scraper_loop():
     await bot.wait_until_ready()
-    
     async with aiohttp.ClientSession() as session:
         reddit_targets = [
-            "https://www.reddit.com/r/AsphaltLegendsUnite/new.json?limit=10",
-            "https://www.reddit.com/r/Asphalt9/new.json?limit=10"
+            "https://reddit.com",
+            "https://reddit.com"
         ]
-        
         for url in reddit_targets:
             headers = {"User-Agent": random.choice(USER_AGENTS)}
             try:
@@ -158,7 +156,6 @@ async def auto_code_scraper_loop():
             except Exception as e:
                 print(f"⚠️ Reddit scraping skip node event: {e}")
             await asyncio.sleep(2)
-
         try:
             gameloft_url = "https://asphaltlegends.com"
             headers = {"User-Agent": random.choice(USER_AGENTS)}
@@ -174,9 +171,12 @@ async def auto_code_scraper_loop():
                         await process_text_and_blast(html_text.upper())
         except Exception:
             pass
-
 async def process_text_and_blast(search_blob: str):
-    keywords = ["REDEEM CODE", "NEW CODE", "PROMO CODE", "FREE TOKENS", "REWARD CODE", "WORKING CODE", "UNITE CODE", "GIFT CODE", "SEASON CODE", "CLAIM CODE", "FREEBIE", "PROMOCODE", "REDEEMCODE"]
+    keywords = [
+        "REDEEM CODE", "NEW CODE", "PROMO CODE", "FREE TOKENS", 
+        "REWARD CODE", "WORKING CODE", "UNITE CODE", "GIFT CODE",
+        "SEASON CODE", "CLAIM CODE", "FREEBIE", "PROMOCODE", "REDEEMCODE"
+    ]
     if any(kw in search_blob for kw in keywords):
         for code in CODE_PATTERN.findall(search_blob):
             code = code.upper().replace("-", "")
@@ -206,7 +206,6 @@ async def execute_global_automation_blast(code: str):
         if g_id not in players_by_guild:
             players_by_guild[g_id] = []
         players_by_guild[g_id].append(p)
-        
     for guild_cfg in configs_res:
         guild_id_str = guild_cfg["guild_id"]
         guild = bot.get_guild(int(guild_id_str))
@@ -217,34 +216,30 @@ async def execute_global_automation_blast(code: str):
         if not target_channel:
             continue
             
-        player_role_id = guild_cfg.get("alert_role_id")
-        ping_string = f"<@&{player_role_id}>" if player_role_id else "@everyone"
-        
-        # --- OFFICIAL ASPHALT LEGENDS UNITE COLOR & LAYOUT BRANDING STYLE ---
-        # Dark Cybernavy theme palette with crisp field markers
-        public_embed = discord.Embed(
-            title="✨ ASPHALT LEGENDS UNITE — REDEEMABLE CODE DETECTED ✨", 
-            description=f"A new code has been found on official and community channels! Claim your rewards quickly before expiration.", 
-            color=discord.Color.from_rgb(14, 21, 46)
-        )
-        public_embed.add_field(name="🎁 Code Status", value=f"```\n{code.upper()}\n```", inline=False)
-        public_embed.add_field(name="🌐 Claim Link", value=f"[Open Official Code Portal](https://asphaltlegendsunite.com/redeem)", inline=False)
-        public_embed.set_footer(text="Automated Scraper Engine • Real-time Drops Matrix", icon_url=guild.icon.url if guild.icon else None)
-        public_embed.set_image(url=guild_cfg.get("banner_url", DEFAULT_BANNER))
-        
-        # Suggestion 1: Auto-cleanup past alerts
-        if "last_notification_id" in guild_cfg:
+        # Zero-Clutter Channel Anti-Spam Clean Routine
+        prev_msg_id = guild_cfg.get("last_notification_message_id")
+        if prev_msg_id:
             try:
-                old_msg = await target_channel.fetch_message(guild_cfg["last_notification_id"])
+                old_msg = await target_channel.fetch_message(int(prev_msg_id))
                 await old_msg.delete()
             except Exception:
                 pass
-                
+
+        player_role_id = guild_cfg.get("alert_role_id")
+        ping_string = f"<@&{player_role_id}>" if player_role_id else "@everyone"
+        
+        # Sleek Official Game Dark Navy Layout Branding Scheme Block
+        public_embed = discord.Embed(
+            title="🏁 OFFICIAL ASPHALT LEGENDS UNITE REDEEM CODE 🏁",
+            description=f"A new universal rewards voucher has been deployed!\n\n**PROMO CODE:**\n```📬 {code.upper()} ```\n\n[Launch Official Redeem Portal](https://asphaltlegendsunite.com)",
+            color=discord.Color.from_rgb(14, 21, 46)
+        )
+        public_embed.set_image(url=guild_cfg.get("banner_url", DEFAULT_BANNER))
         try:
             sent_msg = await target_channel.send(content=ping_string, embed=public_embed)
             await loop.run_in_executor(None, lambda: guild_config_col.update_one(
                 {"guild_id": guild_id_str},
-                {"$set": {"last_notification_id": sent_msg.id}}
+                {"$set": {"last_notification_message_id": sent_msg.id}}
             ))
         except Exception:
             pass
@@ -253,17 +248,8 @@ async def execute_global_automation_blast(code: str):
             member = guild.get_member(int(p_info["user_id"]))
             if member:
                 prefilled_url = f"https://gameloft.com{p_info['player_id']}&code={code.upper()}"
-                
-                dm_embed = discord.Embed(
-                    title="🏁 Reward Pipeline Link Online", 
-                    description=f"Your prefilled instant claim link has been compiled successfully.", 
-                    color=discord.Color.from_rgb(14, 21, 46)
-                )
-                dm_embed.add_field(name="🎁 Code", value=f"`{code.upper()}`", inline=True)
-                dm_embed.add_field(name="🆔 Linked Player ID", value=f"`{p_info['player_id'].upper()}`", inline=True)
-                dm_embed.add_field(name="🚀 Shortcut Link", value=f"[Claim Reward Instantly]({prefilled_url})", inline=False)
-                dm_embed.set_footer(text="Direct Pipeline Delivery", icon_url=guild.icon.url if guild.icon else None)
-                
+                dm_embed = discord.Embed(title="🏁 Reward Pipeline Link Online", description=f"Code: `{code.upper()}`", color=discord.Color.from_rgb(14, 21, 46))
+                dm_embed.add_field(name="Link", value=f"[Claim Reward Instantly]({prefilled_url})")
                 try:
                     await member.send(embed=dm_embed)
                     await asyncio.sleep(0.4)
@@ -326,7 +312,6 @@ async def set_id_slash(interaction: discord.Interaction, player_id: str):
     loop = asyncio.get_event_loop()
     prof_check = await loop.run_in_executor(None, lambda: player_profiles_col.find_one({"guild_id": guild_id, "user_id": user_id}))
     current_dm_pref = prof_check.get("dm_enabled", True) if prof_check else True
-    
     await loop.run_in_executor(None, lambda: player_profiles_col.update_one(
         {"guild_id": guild_id, "user_id": user_id},
         {"$set": {"username": interaction.user.name, "player_id": player_id, "dm_enabled": current_dm_pref}},
@@ -347,7 +332,6 @@ async def set_id_slash(interaction: discord.Interaction, player_id: str):
 async def delete_id_slash(interaction: discord.Interaction):
     guild_id = str(interaction.guild_id)
     user_id = str(interaction.user.id)
-    
     loop = asyncio.get_event_loop()
     prof_check = await loop.run_in_executor(None, lambda: player_profiles_col.find_one({"guild_id": guild_id, "user_id": user_id}))
     if prof_check:
@@ -360,17 +344,12 @@ async def delete_id_slash(interaction: discord.Interaction):
 async def toggle_dm_slash(interaction: discord.Interaction):
     guild_id = str(interaction.guild_id)
     user_id = str(interaction.user.id)
-    
     loop = asyncio.get_event_loop()
     prof_check = await loop.run_in_executor(None, lambda: player_profiles_col.find_one({"guild_id": guild_id, "user_id": user_id}))
     if not prof_check:
         return await interaction.response.send_message("⚠️ Register structural ID via `/set_id` first.", ephemeral=True)
-        
     new_pref = not prof_check.get("dm_enabled", True)
-    await loop.run_in_executor(None, lambda: player_profiles_col.update_one(
-        {"guild_id": guild_id, "user_id": user_id},
-        {"$set": {"dm_enabled": new_pref}}
-    ))
+    await loop.run_in_executor(None, lambda: player_profiles_col.update_one({"guild_id": guild_id, "user_id": user_id}, {"$set": {"dm_enabled": new_pref}}))
     await interaction.response.send_message(f"🔔 DM alerts turned **{'ON' if new_pref else 'OFF'}**.")
 
 @bot.tree.command(name="history", description="Displays the last 10 auto-scraped redemption codes.")
@@ -380,13 +359,12 @@ async def history_slash(interaction: discord.Interaction):
     if not cache_res:
         return await interaction.response.send_message("🗂️ No backlog metrics logs recorded.", ephemeral=True)
         
-    embed = discord.Embed(title="🏁 Recent Redemption Drop History", color=discord.Color.from_rgb(14, 21, 46))
+    embed = discord.Embed(title="🏁 Expanded Redemption Drop History (Last 10)", color=discord.Color.from_rgb(14, 21, 46))
     for idx, row in enumerate(cache_res, 1):
         code = row["code"]
-        manual_url = f"https://asphaltlegendsunite.com/redeem"
+        manual_url = f"https://asphaltlegendsunite.com{code}"
         embed.add_field(name=f"{idx}. Code: `{code}`", value=f"🔗 [Claim Shortcut Link]({manual_url})", inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
-
 @bot.tree.command(name="setup", description="Configure the channel and specific target roles.")
 @is_admin_or_delegated()
 async def setup_slash(interaction: discord.Interaction, announcement_channel: discord.TextChannel, admin_role: discord.Role, player_role: discord.Role):
@@ -408,7 +386,6 @@ async def setup_slash(interaction: discord.Interaction, announcement_channel: di
 async def diagnose_slash(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     guild_id = str(interaction.guild_id)
-    
     latency = round(bot.latency * 1000) if bot.latency and not str(bot.latency).isalpha() else 0
     loop = asyncio.get_event_loop()
     
@@ -439,7 +416,6 @@ async def listplayers_slash(interaction: discord.Interaction):
     for info in server_res:
         embed.add_field(name=f"User: {info['username']}", value=f"🆔 Game ID: `{info['player_id']}`", inline=False)
     await interaction.response.send_message(embed=embed)
-
 @bot.tree.command(name="redeem", description="Manual broadcast blast distribution channels operations logs.")
 @is_admin_or_delegated()
 async def redeem_slash(interaction: discord.Interaction, code: str):
@@ -452,27 +428,9 @@ async def redeem_slash(interaction: discord.Interaction, code: str):
     target_channel = bot.get_channel(cfg_res["notification_channel"])
     await interaction.response.defer(ephemeral=True)
     
-    public_embed = discord.Embed(
-        title="✨ ASPHALT LEGENDS UNITE — MANUAL REDEEMABLE CODE ✨", 
-        description=f"A manual broadcast code event has been initiated by server administration.", 
-        color=discord.Color.from_rgb(14, 21, 46)
-    )
-    public_embed.add_field(name="🎁 Code Status", value=f"```\n{code.upper()}\n```", inline=False)
-    public_embed.add_field(name="🌐 Claim Link", value=f"[Open Official Code Portal](https://asphaltlegendsunite.com/redeem)", inline=False)
+    public_embed = discord.Embed(title="🏁 MANUAL REWARDS REDEEM CODE ALERT 🏁", description=f"An administrative reward drop has occurred!\n\n**PROMO CODE:**\n```📬 {code.upper()} ```\n\n[Launch Official Redeem Portal](https://asphaltlegendsunite.com)", color=discord.Color.from_rgb(14, 21, 46))
     public_embed.set_image(url=cfg_res.get("banner_url", DEFAULT_BANNER))
-    
-    if "last_notification_id" in cfg_res:
-        try:
-            old_msg = await target_channel.fetch_message(cfg_res["last_notification_id"])
-            await old_msg.delete()
-        except Exception:
-            pass
-            
-    sent_msg = await target_channel.send(embed=public_embed)
-    await loop.run_in_executor(None, lambda: guild_config_col.update_one(
-        {"guild_id": guild_id},
-        {"$set": {"last_notification_id": sent_msg.id}}
-    ))
+    await target_channel.send(embed=public_embed)
     await interaction.followup.send("✅ Public drop notifications dispatched successfully across connected servers loops nodes links channels.")
 
 @bot.tree.command(name="admin_set_name", description="⚙️ Admin Tool: Adjust user name identifiers mapping loops variables.")
@@ -504,11 +462,7 @@ async def admin_set_media_slash(interaction: discord.Interaction, element: app_c
     guild_id = str(interaction.guild_id)
     field = "banner_url" if element.value == "banner" else "thumbnail_url"
     loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, lambda: guild_config_col.update_one(
-        {"guild_id": guild_id},
-        {"$set": {field: image_url}},
-        upsert=True
-    ))
+    await loop.run_in_executor(None, lambda: guild_config_col.update_one({"guild_id": guild_id}, {"$set": {field: image_url}}, upsert=True))
     await interaction.response.send_message("🎯 Success theme matrix asset overrides saved to cloud instance lines checked.")
 
 @bot.tree.command(name="admin_reset_defaults", description="⚙️ Admin Tool: Clear configurations visual branding parameters overrides.")
@@ -516,12 +470,8 @@ async def admin_set_media_slash(interaction: discord.Interaction, element: app_c
 async def admin_reset_defaults_slash(interaction: discord.Interaction):
     guild_id = str(interaction.guild_id)
     loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, lambda: guild_config_col.update_one(
-        {"guild_id": guild_id},
-        {"$set": {"banner_url": DEFAULT_BANNER, "thumbnail_url": DEFAULT_THUMBNAIL}}
-    ))
+    await loop.run_in_executor(None, lambda: guild_config_col.update_one({"guild_id": guild_id}, {"$set": {"banner_url": DEFAULT_BANNER, "thumbnail_url": DEFAULT_THUMBNAIL}}))
     await interaction.response.send_message("🧹 Overrides dropped. Original themes parameters re-enabled successfully traces checks logged!")
-
 class ConfirmClearHistoryView(discord.ui.View):
     def __init__(self, author: discord.Member, guild_id: str):
         super().__init__(timeout=60)
@@ -534,9 +484,12 @@ class ConfirmClearHistoryView(discord.ui.View):
     @discord.ui.button(label="Confirm", style=discord.ButtonStyle.success, emoji="🟢")
     async def confirm_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, lambda: player_profiles_col.delete_many({"guild_id": self.guild_id}))
-        self.stop()
-        await interaction.response.edit_message(content="🧹 Wiped registration logs from server caches successfully!", view=None)
+        try:
+            await loop.run_in_executor(None, lambda: player_profiles_col.delete_many({"guild_id": self.guild_id}))
+            self.stop()
+            await interaction.response.edit_message(content="🧹 Wiped registration logs from server caches successfully!", view=None)
+        except pymongo.errors.PyMongoError as err:
+            await interaction.response.edit_message(content=f"⚠️ Database Operation Failure: `{str(err)[:100]}`. Double-check your MONGO_URI setup properties.", view=None)
         
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger, emoji="🔴")
     async def cancel_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -555,27 +508,25 @@ async def admin_restore_slash(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     guild_id = str(interaction.guild_id)
     loop = asyncio.get_event_loop()
-    archive_res = await loop.run_in_executor(None, lambda: list(backups_archive_col.find({"guild_id": guild_id}).sort("saved_at", DESCENDING)))
-    if not archive_res: return await interaction.followup.send("⚠️ No snapshot archive files located.", ephemeral=True)
-    
-    restored_count = 0
-    seen_users = set()
-    for row in archive_res:
-        u_id = row["user_id"]
-        if u_id not in seen_users:
-            seen_users.add(u_id)
-            await loop.run_in_executor(None, lambda: player_profiles_col.update_one(
-                {"guild_id": guild_id, "user_id": u_id},
-                {"$set": {
-                    "username": row["username"], 
-                    "player_id": row["player_id"], 
-                    "dm_enabled": row["dm_enabled"]
-                }},
-                upsert=True
-            ))
-            restored_count += 1
-            
-    await interaction.followup.send(f"🟢 Sync checked! Restored `{restored_count}` player profile entry cards successfully!", ephemeral=True)
+    try:
+        archive_res = await loop.run_in_executor(None, lambda: list(backups_archive_col.find({"guild_id": guild_id}).sort("saved_at", DESCENDING)))
+        if not archive_res: return await interaction.followup.send("⚠️ No snapshot archive files located.", ephemeral=True)
+        
+        restored_count = 0
+        seen_users = set()
+        for row in archive_res:
+            u_id = row["user_id"]
+            if u_id not in seen_users:
+                seen_users.add(u_id)
+                await loop.run_in_executor(None, lambda: player_profiles_col.update_one(
+                    {"guild_id": guild_id, "user_id": u_id},
+                    {"$set": {"username": row["username"], "player_id": row["player_id"], "dm_enabled": row["dm_enabled"]}},
+                    upsert=True
+                ))
+                restored_count += 1
+        await interaction.followup.send(f"🟢 Sync checked! Restored `{restored_count}` player profile entry cards successfully!", ephemeral=True)
+    except pymongo.errors.PyMongoError as err:
+        await interaction.followup.send(f"⚠️ Snapshot Restore Failure: `{str(err)[:100]}`", ephemeral=True)
 
 token = os.environ.get("DISCORD_BOT_TOKEN", "")
 if not token and os.path.exists("token.txt"):
