@@ -1,6 +1,3 @@
-# ==============================================================================
-# SECTION 1: CORE APPLICATION LIBRARIES & BASE MANIFESTS
-# ==============================================================================
 import discord
 from discord import app_commands
 from discord.ext import tasks, commands
@@ -15,6 +12,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import socketserver
 from pymongo import MongoClient, DESCENDING
 import pymongo
+
 # ==============================================================================
 # SECTION 2: WEB INFRASTRUCTURE BACKGROUND RECEPTACLE
 # ==============================================================================
@@ -31,6 +29,7 @@ class KeepAliveHandler(BaseHTTPRequestHandler):
 class ResilientHTTPServer(HTTPServer):
     # Explicitly enforce socket address reuse parameters to clear locks fast
     allow_reuse_address = True
+
 def run_web_server():
     try:
         server = ResilientHTTPServer(("0.0.0.0", 10000), KeepAliveHandler)
@@ -40,6 +39,7 @@ def run_web_server():
         print(f"⚠️ Web Infrastructure Note (Port 10000 busy): {e}. Proceeding smoothly.")
 
 threading.Thread(target=run_web_server, daemon=True).start()
+
 # ==============================================================================
 # SECTION 3: SYSTEM SEARCH INTERFACES & EXCLUSIONS
 # ==============================================================================
@@ -58,6 +58,7 @@ USER_AGENTS = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
 ]
+
 # ==============================================================================
 # SECTION 4: MONGODB CONNECTIONS UTILITIES
 # ==============================================================================
@@ -71,6 +72,7 @@ guild_config_col = db["guild_config"]
 player_profiles_col = db["player_profiles"]
 scraper_cache_col = db["scraper_cache"]
 backups_archive_col = db["daily_backups_archive"]
+
 # ==============================================================================
 # SECTION 5: APPLICATION BOOT SYSTEM
 # ==============================================================================
@@ -89,6 +91,7 @@ async def on_ready():
         
     if not auto_code_scraper_loop.is_running():
         auto_code_scraper_loop.start()
+
 # ==============================================================================
 # SECTION 6: INTERACTIVE DROPDOWN INTERACTION CHANNELS
 # ==============================================================================
@@ -102,6 +105,7 @@ class HelpDropdown(discord.ui.Select):
             options.append(discord.SelectOption(label="🛡️ Admin Utilities", value="admin", description="Admin workbench mapping"))
             
         super().__init__(placeholder="Select system segment...", min_values=1, max_values=1, options=options)
+
     async def callback(self, interaction: discord.Interaction):
         guild_id = str(interaction.guild_id)
         loop = asyncio.get_event_loop()
@@ -113,7 +117,7 @@ class HelpDropdown(discord.ui.Select):
             banner = cfg_res.get("banner_url", DEFAULT_BANNER)
             thumb = cfg_res.get("thumbnail_url", DEFAULT_THUMBNAIL)
 
-        selected_value = self.values if self.values else ""
+        selected_value = self.values[0] if self.values else ""
         embed = discord.Embed(title="Error", description="Unknown partition route parameters.")
         if selected_value == "overview":
             embed = discord.Embed(title="🤖 Asphalt Legends Fast Redeem Manual", description="Automated drops processing layout matrix.", color=discord.Color.from_rgb(14, 21, 46))
@@ -134,6 +138,7 @@ class HelpView(discord.ui.View):
     def __init__(self, show_admin_docs: bool):
         super().__init__(timeout=180)
         self.add_item(HelpDropdown(show_admin_docs))
+
 # ==============================================================================
 # SECTION 7: EXPANDED DUAL-PLATFORM BACKGROUND AUTOMATION SCRAPER
 # ==============================================================================
@@ -173,6 +178,7 @@ async def auto_code_scraper_loop():
                         await process_text_and_blast(html_text.upper())
         except Exception:
             pass
+
 async def process_text_and_blast(search_blob: str):
     keywords = [
         "REDEEM CODE", "NEW CODE", "PROMO CODE", "FREE TOKENS", 
@@ -191,6 +197,7 @@ async def process_text_and_blast(search_blob: str):
                 await loop.run_in_executor(None, lambda: scraper_cache_col.insert_one({"code": code, "detected_at": datetime.now(timezone.utc)}))
                 print(f"📡 Multi-Site Scraper Detected Fresh Code Matrix: {code}")
                 await execute_global_automation_blast(code)
+
 # ==============================================================================
 # SECTION 8: CODES DISTRIBUTION HYPER-DRIVE LOOP
 # ==============================================================================
@@ -208,6 +215,7 @@ async def execute_global_automation_blast(code: str):
         if g_id not in players_by_guild:
             players_by_guild[g_id] = []
         players_by_guild[g_id].append(p)
+
     for guild_cfg in configs_res:
         guild_id_str = guild_cfg["guild_id"]
         guild = bot.get_guild(int(guild_id_str))
@@ -256,6 +264,7 @@ async def execute_global_automation_blast(code: str):
                     await asyncio.sleep(0.4)
                 except Exception:
                     pass
+
 # ==============================================================================
 # SECTION 9: SECURE POLICY COMPLIANCE EXCEPTION HANDLERS
 # ==============================================================================
@@ -283,6 +292,7 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
     if isinstance(error, app_commands.errors.MissingPermissions):
         if not interaction.response.is_done():
             await interaction.response.send_message("🚫 **Access Denied:** administrative clearances validation error.", ephemeral=True)
+
 # ==============================================================================
 # SECTION 10: USER FRONTEND SLASHPANEL TERMINAL NODES
 # ==============================================================================
@@ -323,8 +333,10 @@ async def set_id_slash(interaction: discord.Interaction, player_id: str):
     if cfg_check and cfg_check.get("alert_role_id"):
         role = interaction.guild.get_role(int(cfg_check["alert_role_id"]))
         if role:
-            try: await interaction.user.add_roles(role)
-            except discord.Forbidden: pass
+            try:
+                await interaction.user.add_roles(role)
+            except discord.Forbidden:
+                pass
                 
     dm_status_str = "ON" if current_dm_pref else "OFF"
     await interaction.response.send_message(f"✅ Linked Asphalt ID: **{player_id}**\n🔔 DM Alerts: **{dm_status_str}**")
@@ -382,6 +394,7 @@ async def setup_slash(interaction: discord.Interaction, announcement_channel: di
         upsert=True
     ))
     await interaction.response.send_message("⚙️ Setup matrix configuration nodes saved directly to cloud tables rows checked successfully!")
+
 @bot.tree.command(name="diagnose", description="🛡️ Admin Tool: Runs an interactive system diagnostic stability health check.")
 @is_admin_or_delegated()
 async def diagnose_slash(interaction: discord.Interaction):
@@ -442,7 +455,8 @@ async def admin_set_name_slash(interaction: discord.Interaction, name: str):
     try:
         await bot.user.edit(username=name)
         await interaction.followup.send(f"🎯 Name string adjusted to: **{name}**")
-    except Exception as e: await interaction.followup.send(f"❌ Limits bound constraint blocking logic error exception: {e}")
+    except Exception as e:
+        await interaction.followup.send(f"❌ Limits bound constraint blocking logic error exception: {e}")
 
 @bot.tree.command(name="admin_set_avatar", description="⚙️ Admin Tool: Adjust bot application graphic profile interface icons templates.")
 @is_admin_or_delegated()
@@ -454,13 +468,15 @@ async def admin_set_avatar_slash(interaction: discord.Interaction, attachment: d
         image_bytes = await attachment.read()
         await bot.user.edit(avatar=image_bytes)
         await interaction.followup.send("🎯 Success avatar assets configured completely globally checks checked!")
-    except Exception as e: await interaction.followup.send(f"❌ Rejection handling trigger: {e}")
+    except Exception as e:
+        await interaction.followup.send(f"❌ Rejection handling trigger: {e}")
 
 @bot.tree.command(name="admin_set_media", description="⚙️ Admin Tool: Custom graphics links.")
 @app_commands.choices(element=[app_commands.Choice(name="Banner", value="banner"), app_commands.Choice(name="Thumbnail", value="thumbnail")])
 @is_admin_or_delegated()
 async def admin_set_media_slash(interaction: discord.Interaction, element: app_commands.Choice[str], image_url: str):
-    if not image_url.startswith("http"): return await interaction.response.send_message("⚠️ Must be valid web URL protocol string.", ephemeral=True)
+    if not image_url.startswith("http"):
+         return await interaction.response.send_message("⚠️ Must be valid web URL protocol string.", ephemeral=True)
     guild_id = str(interaction.guild_id)
     field = "banner_url" if element.value == "banner" else "thumbnail_url"
     loop = asyncio.get_event_loop()
@@ -513,7 +529,8 @@ async def admin_restore_slash(interaction: discord.Interaction):
     loop = asyncio.get_event_loop()
     try:
         archive_res = await loop.run_in_executor(None, lambda: list(backups_archive_col.find({"guild_id": guild_id}).sort("saved_at", DESCENDING)))
-        if not archive_res: return await interaction.followup.send("⚠️ No snapshot archive files located.", ephemeral=True)
+        if not archive_res:
+            return await interaction.followup.send("⚠️ No snapshot archive files located.", ephemeral=True)
         
         restored_count = 0
         seen_users = set()
@@ -533,4 +550,10 @@ async def admin_restore_slash(interaction: discord.Interaction):
 
 token = os.environ.get("DISCORD_BOT_TOKEN", "")
 if not token and os.path.exists("token.txt"):
-with open("token.txt", "r", encoding="utf-8") as tf: token = tf.read().strip()if not token or token == "YOUR_TOKEN_HERE": print("❌ ERROR: Missing credential keys mapping token configurations variables.")else: bot.run(token)
+    with open("token.txt", "r", encoding="utf-8") as tf: 
+        token = tf.read().strip()
+
+if not token or token == "YOUR_TOKEN_HERE": 
+    print("❌ ERROR: Missing credential keys mapping token configurations variables.")
+else: 
+    bot.run(token)
