@@ -292,7 +292,8 @@ async def set_id_slash(interaction: discord.Interaction, player_id: str):
             except discord.Forbidden: pass
                 
     dm_status_str = "ON" if current_dm_pref else "OFF"
-    await interaction.response.send_message(f"✅ Linked Asphalt ID: **{player_id}**\n🔔 DM Alerts: **{dm_status_str}**")
+    await interaction.response.send_message(f"✅ Linked Asphalt ID: **{player_id}**
+🔔 DM Alerts: **{dm_status_str}**")
 
 @bot.tree.command(name="delete_id", description="Removes your game registration metadata profile completely.")
 async def delete_id_slash(interaction: discord.Interaction):
@@ -464,14 +465,14 @@ class ConfirmClearHistoryView(discord.ui.View):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return interaction.user.id == self.author.id
         
-    @discord.ui.button(label="Confirm Delete", style=discord.ButtonStyle.danger, emoji="🔴")
+    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.success, emoji="🟢")
     async def confirm_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, lambda: player_profiles_col.delete_many({"guild_id": self.guild_id}))
         self.stop()
         await interaction.response.edit_message(content="🧹 Wiped registration logs from server caches successfully!", view=None)
         
-    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.success, emoji="🟢")
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger, emoji="🔴")
     async def cancel_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.stop()
         await interaction.response.edit_message(content="🛑 Operation Aborted.", view=None)
