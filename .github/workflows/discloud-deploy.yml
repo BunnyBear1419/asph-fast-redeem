@@ -1,0 +1,23 @@
+name: 🚀 Discloud Production Auto-Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Repository Source Files
+        uses: actions/checkout@v4
+
+      - name: 📦 Create Discloud Deployment Bundle
+        run: |
+          zip -r deploy.zip bot.py discloud.config requirements.txt
+
+      - name: ⚡ Upload Bundle to Discloud Platinum API Nodes
+        run: |
+          curl -X PUT "https://discloudbot.com" \
+               -H "api-token: ${{ secrets.DISCLOUD_TOKEN }}" \
+               -F "file=@deploy.zip"
