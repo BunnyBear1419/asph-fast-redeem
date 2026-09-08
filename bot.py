@@ -410,17 +410,22 @@ async def diagnose_slash(interaction: discord.Interaction):
     latency = round(bot.latency * 1000) if bot.latency and not str(bot.latency).isalpha() else 0
     loop = asyncio.get_event_loop()
     
+    # Trace exactly what environment parameters Discloud is feeding the application
+    raw_env_uri = os.environ.get("MONGO_URI", "NOT_FOUND_USING_CODE_FALLBACK")
+    masked_uri = "Code Fallback Safe" if raw_env_uri == "NOT_FOUND_USING_CODE_FALLBACK" else f"...{raw_env_uri[-25:]}"
+
     mongo_status = "🟢 Connected"
     try:
         await loop.run_in_executor(None, lambda: db.command("ping"))
         prof_count = await loop.run_in_executor(None, lambda: player_profiles_col.count_documents({"guild_id": guild_id}))
     except Exception as e:
-        mongo_status = f"🔴 Connection Failed: {str(e)[:50]}"
+        mongo_status = f"🔴 Connection Failed: {str(e)[:45]}"
         prof_count = "N/A"
 
     embed = discord.Embed(title="🛡️ System Diagnostics Status", color=discord.Color.from_rgb(14, 21, 46))
     embed.add_field(name="Satellite Delay Latency", value=f"`{latency}ms`", inline=True)
     embed.add_field(name="MongoDB Connection Status", value=f"`{mongo_status}`", inline=True)
+    embed.add_field(name="Discloud Active URI State", value=f"`{masked_uri}`", inline=False)
     embed.add_field(name="MongoDB Cloud Online Vaults", value=f"`{prof_count} Live Entries`", inline=False)
     await interaction.followup.send(embed=embed, ephemeral=True)
 
