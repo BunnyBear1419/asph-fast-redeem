@@ -1,3 +1,6 @@
+# ==============================================================================
+# SECTION 1: CORE APPLICATION LIBRARIES & BASE MANIFESTS
+# ==============================================================================
 import discord
 from discord import app_commands
 from discord.ext import tasks, commands
@@ -27,7 +30,6 @@ class KeepAliveHandler(BaseHTTPRequestHandler):
         return
 
 class ResilientHTTPServer(HTTPServer):
-    # Explicitly enforce socket address reuse parameters to clear locks fast
     allow_reuse_address = True
 
 def run_web_server():
@@ -35,7 +37,6 @@ def run_web_server():
         server = ResilientHTTPServer(("0.0.0.0", 10000), KeepAliveHandler)
         server.serve_forever()
     except OSError as e:
-        # Gracefully handle port overlaps without breaking the boot thread
         print(f"⚠️ Web Infrastructure Note (Port 10000 busy): {e}. Proceeding smoothly.")
 
 threading.Thread(target=run_web_server, daemon=True).start()
@@ -62,7 +63,10 @@ USER_AGENTS = [
 # ==============================================================================
 # SECTION 4: MONGODB CONNECTIONS UTILITIES
 # ==============================================================================
-MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017")
+MONGO_URI = os.environ.get(
+    "MONGO_URI", 
+    "mongodb+srv://aubreya100114_db_user:DeVQIH0mVoez3XjL@cluster0.qoxyjym.mongodb.net/asphalt_bot_db?appName=Cluster0"
+)
 MONGO_DB_NAME = os.environ.get("MONGO_DB_NAME", "asphalt_bot_db")
 
 mongo_client = MongoClient(MONGO_URI)
@@ -119,6 +123,7 @@ class HelpDropdown(discord.ui.Select):
 
         selected_value = self.values[0] if self.values else ""
         embed = discord.Embed(title="Error", description="Unknown partition route parameters.")
+        
         if selected_value == "overview":
             embed = discord.Embed(title="🤖 Asphalt Legends Fast Redeem Manual", description="Automated drops processing layout matrix.", color=discord.Color.from_rgb(14, 21, 46))
             embed.set_image(url=banner)
@@ -215,7 +220,7 @@ async def execute_global_automation_blast(code: str):
         if g_id not in players_by_guild:
             players_by_guild[g_id] = []
         players_by_guild[g_id].append(p)
-
+        
     for guild_cfg in configs_res:
         guild_id_str = guild_cfg["guild_id"]
         guild = bot.get_guild(int(guild_id_str))
@@ -226,7 +231,6 @@ async def execute_global_automation_blast(code: str):
         if not target_channel:
             continue
             
-        # Zero-Clutter Channel Clearing logic: delete the previous alert automatically
         prev_msg_id = guild_cfg.get("last_notification_message_id")
         if prev_msg_id:
             try:
@@ -333,13 +337,16 @@ async def set_id_slash(interaction: discord.Interaction, player_id: str):
     if cfg_check and cfg_check.get("alert_role_id"):
         role = interaction.guild.get_role(int(cfg_check["alert_role_id"]))
         if role:
-            try:
+            try: 
                 await interaction.user.add_roles(role)
-            except discord.Forbidden:
+            except discord.Forbidden: 
                 pass
                 
     dm_status_str = "ON" if current_dm_pref else "OFF"
-    await interaction.response.send_message(f"✅ Linked Asphalt ID: **{player_id}**\n🔔 DM Alerts: **{dm_status_str}**")
+    await interaction.response.send_message(
+        f"✅ Linked Asphalt ID: **{player_id}**\n"
+        f"🔔 DM Alerts: **{dm_status_str}**"
+    )
 
 @bot.tree.command(name="delete_id", description="Removes your game registration metadata profile completely.")
 async def delete_id_slash(interaction: discord.Interaction):
@@ -455,7 +462,7 @@ async def admin_set_name_slash(interaction: discord.Interaction, name: str):
     try:
         await bot.user.edit(username=name)
         await interaction.followup.send(f"🎯 Name string adjusted to: **{name}**")
-    except Exception as e:
+    except Exception as e: 
         await interaction.followup.send(f"❌ Limits bound constraint blocking logic error exception: {e}")
 
 @bot.tree.command(name="admin_set_avatar", description="⚙️ Admin Tool: Adjust bot application graphic profile interface icons templates.")
@@ -468,15 +475,15 @@ async def admin_set_avatar_slash(interaction: discord.Interaction, attachment: d
         image_bytes = await attachment.read()
         await bot.user.edit(avatar=image_bytes)
         await interaction.followup.send("🎯 Success avatar assets configured completely globally checks checked!")
-    except Exception as e:
+    except Exception as e: 
         await interaction.followup.send(f"❌ Rejection handling trigger: {e}")
 
 @bot.tree.command(name="admin_set_media", description="⚙️ Admin Tool: Custom graphics links.")
 @app_commands.choices(element=[app_commands.Choice(name="Banner", value="banner"), app_commands.Choice(name="Thumbnail", value="thumbnail")])
 @is_admin_or_delegated()
 async def admin_set_media_slash(interaction: discord.Interaction, element: app_commands.Choice[str], image_url: str):
-    if not image_url.startswith("http"):
-         return await interaction.response.send_message("⚠️ Must be valid web URL protocol string.", ephemeral=True)
+    if not image_url.startswith("http"): 
+        return await interaction.response.send_message("⚠️ Must be valid web URL protocol string.", ephemeral=True)
     guild_id = str(interaction.guild_id)
     field = "banner_url" if element.value == "banner" else "thumbnail_url"
     loop = asyncio.get_event_loop()
@@ -529,7 +536,7 @@ async def admin_restore_slash(interaction: discord.Interaction):
     loop = asyncio.get_event_loop()
     try:
         archive_res = await loop.run_in_executor(None, lambda: list(backups_archive_col.find({"guild_id": guild_id}).sort("saved_at", DESCENDING)))
-        if not archive_res:
+        if not archive_res: 
             return await interaction.followup.send("⚠️ No snapshot archive files located.", ephemeral=True)
         
         restored_count = 0
