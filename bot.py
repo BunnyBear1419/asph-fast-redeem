@@ -9,8 +9,9 @@ import asyncio
 import threading
 import re
 import aiohttp
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from supabase import create_client, Client
+from pymongo import MongoClient, DESCENDING
 # ==============================================================================
 # SECTION 2: WEB INFRASTRUCTURE BACKGROUND RECEPTACLE
 # ==============================================================================
@@ -42,12 +43,20 @@ BLACKLISTED_WORDS = {
 DEFAULT_BANNER = "https://imgur.com"
 DEFAULT_THUMBNAIL = "https://imgur.com"
 # ==============================================================================
-# SECTION 4: SUPABASE CONNECTIONS UTILITIES
+# SECTION 4: MONGODB CONNECTIONS UTILITIES
 # ==============================================================================
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
+MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017")
+MONGO_DB_NAME = os.environ.get("MONGO_DB_NAME", "asphalt_bot_db")
 
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+# Initialize MongoDB Client
+mongo_client = MongoClient(MONGO_URI)
+db = mongo_client[MONGO_DB_NAME]
+
+# Collections Mapping
+guild_config_col = db["guild_config"]
+player_profiles_col = db["player_profiles"]
+scraper_cache_col = db["scraper_cache"]
+backups_archive_col = db["daily_backups_archive"]
 # ==============================================================================
 # SECTION 5: APPLICATION BOOT SYSTEM
 # ==============================================================================
@@ -58,7 +67,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
-    print(f"✅ Supabase cluster linked: {bot.user.name}")
+    print(f"✅ MongoDB cluster linked: {bot.user.name}")
     try:
         await bot.tree.sync()
     except Exception as e:
@@ -79,19 +88,20 @@ class HelpDropdown(discord.ui.Select):
             options.append(discord.SelectOption(label="🛡️ Admin Utilities", value="admin", description="Admin workbench mapping"))
             
         super().__init__(placeholder="Select system segment...", min_values=1, max_values=1, options=options)
+        
     async def callback(self, interaction: discord.Interaction):
         guild_id = str(interaction.guild_id)
         
         loop = asyncio.get_event_loop()
         cfg_res = await loop.run_in_executor(
-            None, lambda: supabase.table("guild_config").select("banner_url, thumbnail_url").eq("guild_id", guild_id).execute()
+            None, lambda: guild_config_col.find_one({"guild_id": guild_id})
         )
         
         banner = DEFAULT_BANNER
         thumb = DEFAULT_THUMBNAIL
-        if cfg_res.data and len(cfg_res.data) > 0:
-            banner = cfg_res.data[0].get("banner_url", DEFAULT_BANNER)
-            thumb = cfg_res.data[0].get("thumbnail_url", DEFAULT_THUMBNAIL)
+        if cfg_res:
+            banner = cfg_res.get("banner_url", DEFAULT_BANNER)
+            thumb = cfg_res.get("thumbnail_url", DEFAULT_THUMBNAIL)
 
         selected_value = self.values[0] if self.values else ""
         embed = discord.Embed(title="Error", description="Unknown partition route selection parameters.")
@@ -146,6 +156,7 @@ async def auto_code_scraper_loop():
                         await process_text_and_blast(search_blob)
         except Exception:
             pass
+
 async def process_text_and_blast(search_blob: str):
     keywords = ["REDEEM CODE", "NEW CODE", "PROMO CODE", "FREE TOKENS", "REWARD CODE", "WORKING CODE", "UNITE CODE"]
     if any(kw in search_blob for kw in keywords):
@@ -155,9 +166,9 @@ async def process_text_and_blast(search_blob: str):
                 continue
                 
             loop = asyncio.get_event_loop()
-            cache_check = await loop.run_in_executor(None, lambda: supabase.table("scraper_cache").select("code").eq("code", code).execute())
-            if not cache_check.data:
-                await loop.run_in_executor(None, lambda: supabase.table("scraper_cache").insert({"code": code}).execute())
+            cache_check = await loop.run_in_executor(None, lambda: scraper_cache_col.find_one({"code": code}))
+            if not cache_check:
+                await loop.run_in_executor(None, lambda: scraper_cache_col.insert_one({"code": code, "detected_at": datetime.now(timezone.utc)}))
                 print(f"📡 Multi-Site Scraper Detected Fresh Code Matrix: {code}")
                 await execute_global_automation_blast(code)
 # ==============================================================================
@@ -165,19 +176,20 @@ async def process_text_and_blast(search_blob: str):
 # ==============================================================================
 async def execute_global_automation_blast(code: str):
     loop = asyncio.get_event_loop()
-    configs_res = await loop.run_in_executor(None, lambda: supabase.table("guild_config").select("*").execute())
-    profiles_res = await loop.run_in_executor(None, lambda: supabase.table("player_profiles").select("*").eq("dm_enabled", True).execute())
+    configs_res = await loop.run_in_executor(None, lambda: list(guild_config_col.find({})))
+    profiles_res = await loop.run_in_executor(None, lambda: list(player_profiles_col.find({"dm_enabled": True})))
     
-    if not configs_res.data:
+    if not configs_res:
         return
 
     players_by_guild = {}
-    for p in profiles_res.data:
+    for p in profiles_res:
         g_id = p["guild_id"]
         if g_id not in players_by_guild:
             players_by_guild[g_id] = []
         players_by_guild[g_id].append(p)
-    for guild_cfg in configs_res.data:
+        
+    for guild_cfg in configs_res:
         guild_id_str = guild_cfg["guild_id"]
         guild = bot.get_guild(int(guild_id_str))
         if not guild:
@@ -187,7 +199,7 @@ async def execute_global_automation_blast(code: str):
         if not target_channel:
             continue
             
-        player_role_id = guild_cfg["alert_role_id"]
+        player_role_id = guild_cfg.get("alert_role_id")
         ping_string = f"<@&{player_role_id}>" if player_role_id else "@everyone"
         
         public_embed = discord.Embed(title="🏎️ Automated Asphalt Legends Redeem Code! 🏎️", description=f"🚨 Code: `{code.upper()}`", color=discord.Color.from_rgb(230, 160, 15))
@@ -220,10 +232,10 @@ def is_admin_or_delegated():
         
         guild_id = str(interaction.guild.id)
         loop = asyncio.get_event_loop()
-        cfg_check = await loop.run_in_executor(None, lambda: supabase.table("guild_config").select("bot_admin_role_id").eq("guild_id", guild_id).execute())
+        cfg_check = await loop.run_in_executor(None, lambda: guild_config_col.find_one({"guild_id": guild_id}))
         
-        if cfg_check.data and len(cfg_check.data) > 0:
-            delegated_role_id = cfg_check.data[0].get("bot_admin_role_id")
+        if cfg_check:
+            delegated_role_id = cfg_check.get("bot_admin_role_id")
             if delegated_role_id and discord.utils.get(interaction.user.roles, id=int(delegated_role_id)):
                 return True
                 
@@ -246,8 +258,8 @@ async def help_slash(interaction: discord.Interaction):
         is_authorized = True
     else:
         loop = asyncio.get_event_loop()
-        cfg_check = await loop.run_in_executor(None, lambda: supabase.table("guild_config").select("bot_admin_role_id").eq("guild_id", guild_id).execute())
-        if cfg_check.data and len(cfg_check.data) > 0 and discord.utils.get(interaction.user.roles, id=int(cfg_check.data[0]["bot_admin_role_id"])):
+        cfg_check = await loop.run_in_executor(None, lambda: guild_config_col.find_one({"guild_id": guild_id}))
+        if cfg_check and cfg_check.get("bot_admin_role_id") and discord.utils.get(interaction.user.roles, id=int(cfg_check["bot_admin_role_id"])):
             is_authorized = True
 
     embed = discord.Embed(title="🗂️ Help Documentation Center", description="Select choice parameters matrix:", color=discord.Color.from_rgb(20, 24, 40))
@@ -263,31 +275,33 @@ async def set_id_slash(interaction: discord.Interaction, player_id: str):
     user_id = str(interaction.user.id)
     
     loop = asyncio.get_event_loop()
-    prof_check = await loop.run_in_executor(None, lambda: supabase.table("player_profiles").select("dm_enabled").eq("guild_id", guild_id).eq("user_id", user_id).execute())
-    current_dm_pref = prof_check.data[0]["dm_enabled"] if prof_check.data and len(prof_check.data) > 0 else True
+    prof_check = await loop.run_in_executor(None, lambda: player_profiles_col.find_one({"guild_id": guild_id, "user_id": user_id}))
+    current_dm_pref = prof_check.get("dm_enabled", True) if prof_check else True
     
-    await loop.run_in_executor(None, lambda: supabase.table("player_profiles").upsert({
-        "guild_id": guild_id, "user_id": user_id, "username": interaction.user.name, "player_id": player_id, "dm_enabled": current_dm_pref
-    }).execute())
+    await loop.run_in_executor(None, lambda: player_profiles_col.update_one(
+        {"guild_id": guild_id, "user_id": user_id},
+        {"$set": {"username": interaction.user.name, "player_id": player_id, "dm_enabled": current_dm_pref}},
+        upsert=True
+    ))
     
-    cfg_check = await loop.run_in_executor(None, lambda: supabase.table("guild_config").select("alert_role_id").eq("guild_id", guild_id).execute())
-    role_msg = ""
-    if cfg_check.data and len(cfg_check.data) > 0 and cfg_check.data[0]["alert_role_id"]:
-        role = interaction.guild.get_role(int(cfg_check.data[0]["alert_role_id"]))
+    cfg_check = await loop.run_in_executor(None, lambda: guild_config_col.find_one({"guild_id": guild_id}))
+    if cfg_check and cfg_check.get("alert_role_id"):
+        role = interaction.guild.get_role(int(cfg_check["alert_role_id"]))
         if role:
             try: await interaction.user.add_roles(role)
             except discord.Forbidden: pass
                 
     await interaction.response.send_message(f"✅ Linked Asphalt ID: **{player_id}**\n🔔 DM Alerts: {'**ON**' if current_dm_pref else '**OFF**'}")
+
 @bot.tree.command(name="delete_id", description="Removes your game registration metadata profile completely.")
 async def delete_id_slash(interaction: discord.Interaction):
     guild_id = str(interaction.guild_id)
     user_id = str(interaction.user.id)
     
     loop = asyncio.get_event_loop()
-    prof_check = await loop.run_in_executor(None, lambda: supabase.table("player_profiles").select("user_id").eq("guild_id", guild_id).eq("user_id", user_id).execute())
-    if prof_check.data and len(prof_check.data) > 0:
-        await loop.run_in_executor(None, lambda: supabase.table("player_profiles").delete().eq("guild_id", guild_id).eq("user_id", user_id).execute())
+    prof_check = await loop.run_in_executor(None, lambda: player_profiles_col.find_one({"guild_id": guild_id, "user_id": user_id}))
+    if prof_check:
+        await loop.run_in_executor(None, lambda: player_profiles_col.delete_one({"guild_id": guild_id, "user_id": user_id}))
         await interaction.response.send_message("❌ Player database asset unlinked safely configuration parameters drops.")
     else:
         await interaction.response.send_message("⚠️ Context profiling signature matching failure.", ephemeral=True)
@@ -298,35 +312,45 @@ async def toggle_dm_slash(interaction: discord.Interaction):
     user_id = str(interaction.user.id)
     
     loop = asyncio.get_event_loop()
-    prof_check = await loop.run_in_executor(None, lambda: supabase.table("player_profiles").select("dm_enabled").eq("guild_id", guild_id).eq("user_id", user_id).execute())
-    if not prof_check.data or len(prof_check.data) == 0:
+    prof_check = await loop.run_in_executor(None, lambda: player_profiles_col.find_one({"guild_id": guild_id, "user_id": user_id}))
+    if not prof_check:
         return await interaction.response.send_message("⚠️ Register structural ID via `/set_id` first.", ephemeral=True)
         
-    new_pref = not prof_check.data[0]["dm_enabled"]
-    await loop.run_in_executor(None, lambda: supabase.table("player_profiles").update({"dm_enabled": new_pref}).eq("guild_id", guild_id).eq("user_id", user_id).execute())
+    new_pref = not prof_check.get("dm_enabled", True)
+    await loop.run_in_executor(None, lambda: player_profiles_col.update_one(
+        {"guild_id": guild_id, "user_id": user_id},
+        {"$set": {"dm_enabled": new_pref}}
+    ))
     await interaction.response.send_message(f"🔔 DM alerts turned **{'ON' if new_pref else 'OFF'}**.")
 
 @bot.tree.command(name="history", description="Displays the last 5 auto-scraped redemption codes.")
 async def history_slash(interaction: discord.Interaction):
     loop = asyncio.get_event_loop()
-    cache_res = await loop.run_in_executor(None, lambda: supabase.table("scraper_cache").select("code, detected_at").order("detected_at", desc=True).limit(5).execute())
-    if not cache_res.data:
+    cache_res = await loop.run_in_executor(None, lambda: list(scraper_cache_col.find({}).sort("detected_at", DESCENDING).limit(5)))
+    if not cache_res:
         return await interaction.response.send_message("🗂️ No backlog metrics logs recorded.", ephemeral=True)
         
     embed = discord.Embed(title="🏁 Recent Redemption Drop History", color=discord.Color.from_rgb(30, 90, 160))
-    for idx, row in enumerate(cache_res.data, 1):
+    for idx, row in enumerate(cache_res, 1):
         code = row["code"]
         manual_url = f"https://asphaltlegendsunite.com{code}"
         embed.add_field(name=f"{idx}. Code: `{code}`", value=f"🔗 [Claim Shortcut Link]({manual_url})", inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
+
 @bot.tree.command(name="setup", description="Configure the channel and specific target roles.")
 @is_admin_or_delegated()
 async def setup_slash(interaction: discord.Interaction, announcement_channel: discord.TextChannel, admin_role: discord.Role, player_role: discord.Role):
     guild_id = str(interaction.guild_id)
     loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, lambda: supabase.table("guild_config").upsert({
-        "guild_id": guild_id, "notification_channel": announcement_channel.id, "bot_admin_role_id": admin_role.id, "alert_role_id": player_role.id
-    }).execute())
+    await loop.run_in_executor(None, lambda: guild_config_col.update_one(
+        {"guild_id": guild_id},
+        {"$set": {
+            "notification_channel": announcement_channel.id, 
+            "bot_admin_role_id": admin_role.id, 
+            "alert_role_id": player_role.id
+        }},
+        upsert=True
+    ))
     await interaction.response.send_message("⚙️ Setup matrix configuration nodes saved directly to cloud tables rows checked successfully!")
 
 @bot.tree.command(name="diagnose", description="🛡️ Admin Tool: Runs an interactive system diagnostic stability health check.")
@@ -337,11 +361,11 @@ async def diagnose_slash(interaction: discord.Interaction):
     latency = round(bot.latency * 1000)
     
     loop = asyncio.get_event_loop()
-    prof_count = await loop.run_in_executor(None, lambda: supabase.table("player_profiles").select("user_id", count="exact").eq("guild_id", guild_id).execute())
+    prof_count = await loop.run_in_executor(None, lambda: player_profiles_col.count_documents({"guild_id": guild_id}))
     
     embed = discord.Embed(title="🛡️ System Diagnostics Status", color=discord.Color.from_rgb(30, 140, 200))
     embed.add_field(name="Satellite Delay Latency", value=f"`{latency}ms`", inline=True)
-    embed.add_field(name="Supabase Cloud Online Vaults", value=f"`{prof_count.count if prof_count.count is not None else 0} Live Entries`", inline=False)
+    embed.add_field(name="MongoDB Cloud Online Vaults", value=f"`{prof_count} Live Entries`", inline=False)
     await interaction.followup.send(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="listplayers", description="Displays membership profiling matrix manifest lists.")
@@ -349,30 +373,29 @@ async def diagnose_slash(interaction: discord.Interaction):
 async def listplayers_slash(interaction: discord.Interaction):
     guild_id = str(interaction.guild_id)
     loop = asyncio.get_event_loop()
-    server_res = await loop.run_in_executor(None, lambda: supabase.table("player_profiles").select("*").eq("guild_id", guild_id).execute())
-    if not server_res.data:
+    server_res = await loop.run_in_executor(None, lambda: list(player_profiles_col.find({"guild_id": guild_id}).limit(20)))
+    if not server_res:
         return await interaction.response.send_message("🧹 Enrollment checklists index metrics are currently blank.", ephemeral=True)
         
     embed = discord.Embed(title="📋 Registered Manifest checklist", color=discord.Color.from_rgb(30, 90, 160))
-    for info in server_res.data[:20]:
+    for info in server_res:
         embed.add_field(name=f"User: {info['username']}", value=f"🆔 Game ID: `{info['player_id']}`", inline=False)
     await interaction.response.send_message(embed=embed)
+
 @bot.tree.command(name="redeem", description="Manual broadcast blast distribution channels operations logs.")
 @is_admin_or_delegated()
 async def redeem_slash(interaction: discord.Interaction, code: str):
     guild_id = str(interaction.guild_id)
     loop = asyncio.get_event_loop()
-    cfg_res = await loop.run_in_executor(None, lambda: supabase.table("guild_config").select("*").eq("guild_id", guild_id).execute())
-    if not cfg_res.data:
+    cfg_res = await loop.run_in_executor(None, lambda: guild_config_col.find_one({"guild_id": guild_id}))
+    if not cfg_res:
         return await interaction.response.send_message("⚠️ Run `/setup` configurations matrix routing fields nodes first.", ephemeral=True)
         
-    cfg = cfg_res.data[0]
-    target_channel = bot.get_channel(cfg["notification_channel"])
-    server_res = await loop.run_in_executor(None, lambda: supabase.table("player_profiles").select("*").eq("guild_id", guild_id).execute())
+    target_channel = bot.get_channel(cfg_res["notification_channel"])
     await interaction.response.defer(ephemeral=True)
     
     public_embed = discord.Embed(title="🏎️ New Asphalt Legends Redeem Code! 🏎️", description=f"Code: `{code.upper()}`", color=discord.Color.from_rgb(230, 160, 15))
-    public_embed.set_image(url=cfg.get("banner_url", DEFAULT_BANNER))
+    public_embed.set_image(url=cfg_res.get("banner_url", DEFAULT_BANNER))
     await target_channel.send(embed=public_embed)
     await interaction.followup.send("✅ Public drop notifications dispatched successfully across connected servers loops nodes links channels.")
 
@@ -405,7 +428,11 @@ async def admin_set_media_slash(interaction: discord.Interaction, element: app_c
     guild_id = str(interaction.guild_id)
     field = "banner_url" if element.value == "banner" else "thumbnail_url"
     loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, lambda: supabase.table("guild_config").upsert({"guild_id": guild_id, field: image_url}).execute())
+    await loop.run_in_executor(None, lambda: guild_config_col.update_one(
+        {"guild_id": guild_id},
+        {"$set": {field: image_url}},
+        upsert=True
+    ))
     await interaction.response.send_message("🎯 Success theme matrix asset overrides saved to cloud instance lines checked.")
 
 @bot.tree.command(name="admin_reset_defaults", description="⚙️ Admin Tool: Clear configurations visual branding parameters overrides.")
@@ -413,21 +440,28 @@ async def admin_set_media_slash(interaction: discord.Interaction, element: app_c
 async def admin_reset_defaults_slash(interaction: discord.Interaction):
     guild_id = str(interaction.guild_id)
     loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, lambda: supabase.table("guild_config").update({"banner_url": DEFAULT_BANNER, "thumbnail_url": DEFAULT_THUMBNAIL}).eq("guild_id", guild_id).execute())
+    await loop.run_in_executor(None, lambda: guild_config_col.update_one(
+        {"guild_id": guild_id},
+        {"$set": {"banner_url": DEFAULT_BANNER, "thumbnail_url": DEFAULT_THUMBNAIL}}
+    ))
     await interaction.response.send_message("🧹 Overrides dropped. Original themes parameters re-enabled successfully traces checks logged!")
+
 class ConfirmClearHistoryView(discord.ui.View):
     def __init__(self, author: discord.Member, guild_id: str):
         super().__init__(timeout=60)
         self.author = author
         self.guild_id = guild_id
+        
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return interaction.user.id == self.author.id
+        
     @discord.ui.button(label="Confirm Delete", style=discord.ButtonStyle.danger, emoji="🔴")
     async def confirm_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, lambda: supabase.table("player_profiles").delete().eq("guild_id", self.guild_id).execute())
+        await loop.run_in_executor(None, lambda: player_profiles_col.delete_many({"guild_id": self.guild_id}))
         self.stop()
         await interaction.response.edit_message(content="🧹 Wiped registration logs from server caches successfully!", view=None)
+        
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.success, emoji="🟢")
     async def cancel_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.stop()
@@ -445,17 +479,27 @@ async def admin_restore_slash(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     guild_id = str(interaction.guild_id)
     loop = asyncio.get_event_loop()
-    archive_res = await loop.run_in_executor(None, lambda: supabase.table("daily_backups_archive").select("*").eq("guild_id", guild_id).order("saved_at", desc=True).execute())
-    if not archive_res.data: return await interaction.followup.send("⚠️ No snapshot archive files located.", ephemeral=True)
+    archive_res = await loop.run_in_executor(None, lambda: list(backups_archive_col.find({"guild_id": guild_id}).sort("saved_at", DESCENDING)))
+    if not archive_res: return await interaction.followup.send("⚠️ No snapshot archive files located.", ephemeral=True)
+    
     restored_count = 0
     seen_users = set()
-    for row in archive_res.data:
+    for row in archive_res:
         u_id = row["user_id"]
         if u_id not in seen_users:
             seen_users.add(u_id)
-            await loop.run_in_executor(None, lambda: supabase.table("player_profiles").upsert({"guild_id": guild_id, "user_id": u_id, "username": row["username"], "player_id": row["player_id"], "dm_enabled": row["dm_enabled"]}).execute())
+            await loop.run_in_executor(None, lambda: player_profiles_col.update_one(
+                {"guild_id": guild_id, "user_id": u_id},
+                {"$set": {
+                    "username": row["username"], 
+                    "player_id": row["player_id"], 
+                    "dm_enabled": row["dm_enabled"]
+                }},
+                upsert=True
+            ))
             restored_count += 1
-            await interaction.followup.send(f"🟢 Sync checked! Restored `{restored_count}` player profile entry cards successfully!", ephemeral=True)
+            
+    await interaction.followup.send(f"🟢 Sync checked! Restored `{restored_count}` player profile entry cards successfully!", ephemeral=True)
 
 token = os.environ.get("DISCORD_BOT_TOKEN", "")
 if not token and os.path.exists("token.txt"):
