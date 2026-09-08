@@ -9,6 +9,7 @@ import asyncio
 import threading
 import re
 import aiohttp
+import random
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pymongo import MongoClient, DESCENDING
@@ -33,26 +34,31 @@ threading.Thread(target=run_web_server, daemon=True).start()
 # ==============================================================================
 # SECTION 3: SYSTEM SEARCH INTERFACES & EXCLUSIONS
 # ==============================================================================
-CODE_PATTERN = re.compile(r'\b[A-Z0-9]{6,14}\b')
+CODE_PATTERN = re.compile(r'\b[A-Za-z0-9_-]{6,16}\b')
 
 BLACKLISTED_WORDS = {
     "REDEEM", "TOKENS", "CREDITS", "ASPHALT", "UNITE", 
-    "REDDIT", "PLAYER", "NINTENDO", "XBOX", "PLAYSTATION"
+    "REDDIT", "PLAYER", "NINTENDO", "XBOX", "PLAYSTATION",
+    "WORKING", "PROMO", "REWARD", "CODES", "DISCORD", "SERVER"
 }
 
 DEFAULT_BANNER = "https://imgur.com"
 DEFAULT_THUMBNAIL = "https://imgur.com"
+
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+]
 # ==============================================================================
 # SECTION 4: MONGODB CONNECTIONS UTILITIES
 # ==============================================================================
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017")
 MONGO_DB_NAME = os.environ.get("MONGO_DB_NAME", "asphalt_bot_db")
 
-# Initialize MongoDB Client
 mongo_client = MongoClient(MONGO_URI)
 db = mongo_client[MONGO_DB_NAME]
 
-# Collections Mapping
 guild_config_col = db["guild_config"]
 player_profiles_col = db["player_profiles"]
 scraper_cache_col = db["scraper_cache"]
@@ -127,42 +133,54 @@ class HelpView(discord.ui.View):
         super().__init__(timeout=180)
         self.add_item(HelpDropdown(show_admin_docs))
 # ==============================================================================
-# SECTION 7: DUAL-PLATFORM BACKGROUND AUTOMATION SCRAPER
+# SECTION 7: EXPANDED DUAL-PLATFORM BACKGROUND AUTOMATION SCRAPER
 # ==============================================================================
-@tasks.loop(minutes=15)
+@tasks.loop(minutes=5)
 async def auto_code_scraper_loop():
     await bot.wait_until_ready()
-    headers = {"User-Agent": "DiscloudPlatinumAsphaltBot/5.0"}
     
     async with aiohttp.ClientSession() as session:
-        try:
-            reddit_url = "https://reddit.com"
-            async with session.get(reddit_url, headers=headers) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    for post in data.get("data", {}).get("children", []):
-                        p_data = post.get("data", {})
-                        search_blob = f"{p_data.get('title', '')} {p_data.get('selftext', '')}".upper()
-                        await process_text_and_blast(search_blob)
-        except Exception as e:
-            print(f"⚠️ Reddit tracking delay event exception: {e}")
+        reddit_targets = [
+            "https://www.reddit.com/r/AsphaltLegendsUnite/new.json?limit=10",
+            "https://www.reddit.com/r/Asphalt9/new.json?limit=10"
+        ]
+        
+        for url in reddit_targets:
+            headers = {"User-Agent": random.choice(USER_AGENTS)}
+            try:
+                async with session.get(url, headers=headers) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        for post in data.get("data", {}).get("children", []):
+                            p_data = post.get("data", {})
+                            search_blob = f"{p_data.get('title', '')} {p_data.get('selftext', '')}".upper()
+                            await process_text_and_blast(search_blob)
+            except Exception as e:
+                print(f"⚠️ Reddit scraping skip node event: {e}")
+            await asyncio.sleep(2)
+
         try:
             gameloft_url = "https://asphaltlegends.com"
+            headers = {"User-Agent": random.choice(USER_AGENTS)}
             async with session.get(gameloft_url, headers=headers) as response:
                 if response.status == 200:
-                    news_data = await response.json()
-                    for article in news_data.get("articles", []):
-                        search_blob = f"{article.get('title', '')} {article.get('description', '')}".upper()
-                        await process_text_and_blast(search_blob)
+                    try:
+                        news_data = await response.json()
+                        for article in news_data.get("articles", []):
+                            search_blob = f"{article.get('title', '')} {article.get('description', '')}".upper()
+                            await process_text_and_blast(search_blob)
+                    except Exception:
+                        html_text = await response.text()
+                        await process_text_and_blast(html_text.upper())
         except Exception:
             pass
 
 async def process_text_and_blast(search_blob: str):
-    keywords = ["REDEEM CODE", "NEW CODE", "PROMO CODE", "FREE TOKENS", "REWARD CODE", "WORKING CODE", "UNITE CODE"]
+    keywords = ["REDEEM CODE", "NEW CODE", "PROMO CODE", "FREE TOKENS", "REWARD CODE", "WORKING CODE", "UNITE CODE", "GIFT CODE", "SEASON CODE", "CLAIM CODE", "FREEBIE", "PROMOCODE", "REDEEMCODE"]
     if any(kw in search_blob for kw in keywords):
         for code in CODE_PATTERN.findall(search_blob):
-            code = code.upper()
-            if code in BLACKLISTED_WORDS:
+            code = code.upper().replace("-", "")
+            if code in BLACKLISTED_WORDS or len(code) < 6:
                 continue
                 
             loop = asyncio.get_event_loop()
@@ -202,10 +220,32 @@ async def execute_global_automation_blast(code: str):
         player_role_id = guild_cfg.get("alert_role_id")
         ping_string = f"<@&{player_role_id}>" if player_role_id else "@everyone"
         
-        public_embed = discord.Embed(title="🏎️ Automated Asphalt Legends Redeem Code! 🏎️", description=f"🚨 Code: `{code.upper()}`", color=discord.Color.from_rgb(230, 160, 15))
+        # --- OFFICIAL ASPHALT LEGENDS UNITE COLOR & LAYOUT BRANDING STYLE ---
+        # Dark Cybernavy theme palette with crisp field markers
+        public_embed = discord.Embed(
+            title="✨ ASPHALT LEGENDS UNITE — REDEEMABLE CODE DETECTED ✨", 
+            description=f"A new code has been found on official and community channels! Claim your rewards quickly before expiration.", 
+            color=discord.Color.from_rgb(14, 21, 46)
+        )
+        public_embed.add_field(name="🎁 Code Status", value=f"```\n{code.upper()}\n```", inline=False)
+        public_embed.add_field(name="🌐 Claim Link", value=f"[Open Official Code Portal](https://asphaltlegendsunite.com/redeem)", inline=False)
+        public_embed.set_footer(text="Automated Scraper Engine • Real-time Drops Matrix", icon_url=guild.icon.url if guild.icon else None)
         public_embed.set_image(url=guild_cfg.get("banner_url", DEFAULT_BANNER))
+        
+        # Suggestion 1: Auto-cleanup past alerts
+        if "last_notification_id" in guild_cfg:
+            try:
+                old_msg = await target_channel.fetch_message(guild_cfg["last_notification_id"])
+                await old_msg.delete()
+            except Exception:
+                pass
+                
         try:
-            await target_channel.send(content=ping_string, embed=public_embed)
+            sent_msg = await target_channel.send(content=ping_string, embed=public_embed)
+            await loop.run_in_executor(None, lambda: guild_config_col.update_one(
+                {"guild_id": guild_id_str},
+                {"$set": {"last_notification_id": sent_msg.id}}
+            ))
         except Exception:
             pass
             
@@ -213,8 +253,17 @@ async def execute_global_automation_blast(code: str):
             member = guild.get_member(int(p_info["user_id"]))
             if member:
                 prefilled_url = f"https://gameloft.com{p_info['player_id']}&code={code.upper()}"
-                dm_embed = discord.Embed(title="🏁 Reward Pipeline Link Online", description=f"Code: `{code.upper()}`", color=discord.Color.from_rgb(40, 180, 70))
-                dm_embed.add_field(name="Link", value=f"[Claim Reward Instantly]({prefilled_url})")
+                
+                dm_embed = discord.Embed(
+                    title="🏁 Reward Pipeline Link Online", 
+                    description=f"Your prefilled instant claim link has been compiled successfully.", 
+                    color=discord.Color.from_rgb(14, 21, 46)
+                )
+                dm_embed.add_field(name="🎁 Code", value=f"`{code.upper()}`", inline=True)
+                dm_embed.add_field(name="🆔 Linked Player ID", value=f"`{p_info['player_id'].upper()}`", inline=True)
+                dm_embed.add_field(name="🚀 Shortcut Link", value=f"[Claim Reward Instantly]({prefilled_url})", inline=False)
+                dm_embed.set_footer(text="Direct Pipeline Delivery", icon_url=guild.icon.url if guild.icon else None)
+                
                 try:
                     await member.send(embed=dm_embed)
                     await asyncio.sleep(0.4)
@@ -262,7 +311,7 @@ async def help_slash(interaction: discord.Interaction):
         if cfg_check and cfg_check.get("bot_admin_role_id") and discord.utils.get(interaction.user.roles, id=int(cfg_check["bot_admin_role_id"])):
             is_authorized = True
 
-    embed = discord.Embed(title="🗂️ Help Documentation Center", description="Select choice parameters matrix:", color=discord.Color.from_rgb(20, 24, 40))
+    embed = discord.Embed(title="🗂️ Help Documentation Center", description="Select choice parameters matrix:", color=discord.Color.from_rgb(14, 21, 46))
     await interaction.response.send_message(embed=embed, view=HelpView(is_authorized), ephemeral=True)
 
 @bot.tree.command(name="set_id", description="Registers your unique Asphalt Game ID.")
@@ -324,17 +373,17 @@ async def toggle_dm_slash(interaction: discord.Interaction):
     ))
     await interaction.response.send_message(f"🔔 DM alerts turned **{'ON' if new_pref else 'OFF'}**.")
 
-@bot.tree.command(name="history", description="Displays the last 5 auto-scraped redemption codes.")
+@bot.tree.command(name="history", description="Displays the last 10 auto-scraped redemption codes.")
 async def history_slash(interaction: discord.Interaction):
     loop = asyncio.get_event_loop()
-    cache_res = await loop.run_in_executor(None, lambda: list(scraper_cache_col.find({}).sort("detected_at", DESCENDING).limit(5)))
+    cache_res = await loop.run_in_executor(None, lambda: list(scraper_cache_col.find({}).sort("detected_at", DESCENDING).limit(10)))
     if not cache_res:
         return await interaction.response.send_message("🗂️ No backlog metrics logs recorded.", ephemeral=True)
         
-    embed = discord.Embed(title="🏁 Recent Redemption Drop History", color=discord.Color.from_rgb(30, 90, 160))
+    embed = discord.Embed(title="🏁 Recent Redemption Drop History", color=discord.Color.from_rgb(14, 21, 46))
     for idx, row in enumerate(cache_res, 1):
         code = row["code"]
-        manual_url = f"https://asphaltlegendsunite.com{code}"
+        manual_url = f"https://asphaltlegendsunite.com/redeem"
         embed.add_field(name=f"{idx}. Code: `{code}`", value=f"🔗 [Claim Shortcut Link]({manual_url})", inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -360,7 +409,7 @@ async def diagnose_slash(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     guild_id = str(interaction.guild_id)
     
-    latency = round(bot.latency * 1000) if bot.latency and not re.match(r'inf|nan', str(bot.latency), re.IGNORECASE) else 0
+    latency = round(bot.latency * 1000) if bot.latency and not str(bot.latency).isalpha() else 0
     loop = asyncio.get_event_loop()
     
     mongo_status = "🟢 Connected"
@@ -371,7 +420,7 @@ async def diagnose_slash(interaction: discord.Interaction):
         mongo_status = f"🔴 Connection Failed: {str(e)[:50]}"
         prof_count = "N/A"
 
-    embed = discord.Embed(title="🛡️ System Diagnostics Status", color=discord.Color.from_rgb(30, 140, 200))
+    embed = discord.Embed(title="🛡️ System Diagnostics Status", color=discord.Color.from_rgb(14, 21, 46))
     embed.add_field(name="Satellite Delay Latency", value=f"`{latency}ms`", inline=True)
     embed.add_field(name="MongoDB Connection Status", value=f"`{mongo_status}`", inline=True)
     embed.add_field(name="MongoDB Cloud Online Vaults", value=f"`{prof_count} Live Entries`", inline=False)
@@ -386,7 +435,7 @@ async def listplayers_slash(interaction: discord.Interaction):
     if not server_res:
         return await interaction.response.send_message("🧹 Enrollment checklists index metrics are currently blank.", ephemeral=True)
         
-    embed = discord.Embed(title="📋 Registered Manifest checklist", color=discord.Color.from_rgb(30, 90, 160))
+    embed = discord.Embed(title="📋 Registered Manifest checklist", color=discord.Color.from_rgb(14, 21, 46))
     for info in server_res:
         embed.add_field(name=f"User: {info['username']}", value=f"🆔 Game ID: `{info['player_id']}`", inline=False)
     await interaction.response.send_message(embed=embed)
@@ -403,9 +452,27 @@ async def redeem_slash(interaction: discord.Interaction, code: str):
     target_channel = bot.get_channel(cfg_res["notification_channel"])
     await interaction.response.defer(ephemeral=True)
     
-    public_embed = discord.Embed(title="🏎️ New Asphalt Legends Redeem Code! 🏎️", description=f"Code: `{code.upper()}`", color=discord.Color.from_rgb(230, 160, 15))
+    public_embed = discord.Embed(
+        title="✨ ASPHALT LEGENDS UNITE — MANUAL REDEEMABLE CODE ✨", 
+        description=f"A manual broadcast code event has been initiated by server administration.", 
+        color=discord.Color.from_rgb(14, 21, 46)
+    )
+    public_embed.add_field(name="🎁 Code Status", value=f"```\n{code.upper()}\n```", inline=False)
+    public_embed.add_field(name="🌐 Claim Link", value=f"[Open Official Code Portal](https://asphaltlegendsunite.com/redeem)", inline=False)
     public_embed.set_image(url=cfg_res.get("banner_url", DEFAULT_BANNER))
-    await target_channel.send(embed=public_embed)
+    
+    if "last_notification_id" in cfg_res:
+        try:
+            old_msg = await target_channel.fetch_message(cfg_res["last_notification_id"])
+            await old_msg.delete()
+        except Exception:
+            pass
+            
+    sent_msg = await target_channel.send(embed=public_embed)
+    await loop.run_in_executor(None, lambda: guild_config_col.update_one(
+        {"guild_id": guild_id},
+        {"$set": {"last_notification_id": sent_msg.id}}
+    ))
     await interaction.followup.send("✅ Public drop notifications dispatched successfully across connected servers loops nodes links channels.")
 
 @bot.tree.command(name="admin_set_name", description="⚙️ Admin Tool: Adjust user name identifiers mapping loops variables.")
