@@ -1,13 +1,15 @@
 import discord
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import tasks, commands
 import json
 import os
 import asyncio
 import threading
+import re
+import aiohttp
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-# --- TINY WEB SERVER TO FOOL RENDER FREE TIER ---
+# --- TINY WEB SERVER TO FOOL HEALTH CHECKS ---
 class KeepAliveHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -23,11 +25,19 @@ def run_web_server():
     server.serve_forever()
 
 threading.Thread(target=run_web_server, daemon=True).start()
-# -----------------------------------------------
+# --------------------------------------------------------------
 
 DB_FILE = "asphalt_bot_database.json"
 CONFIG_FILE = "asphalt_bot_config.json"
+SCRAPER_CACHE_FILE = "asphalt_scraper_cache.json"
 
+# Alphanumeric codes filter pattern (typically matching 6-14 characters for Gameloft codes)
+CODE_PATTERN = re.compile(r'\b[A-Z0-9]{6,14}\b')
+
+# Universal regex false-positives to filter out immediately
+BLACKLISTED_WORDS = {"REDEEM", "TOKENS", "CREDITS", "ASPHALT", "UNITE", "REDDIT", "PLAYER", "NINTENDO", "XBOX", "PLAYSTATION"}
+
+# --- STORAGE DATABASE IO PROTOCOLS ---
 def load_data():
     if os.path.exists(DB_FILE):
         try:
@@ -54,24 +64,42 @@ def save_config(config):
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=4)
 
+def load_scraper_cache():
+    if os.path.exists(SCRAPER_CACHE_FILE):
+        try:
+            with open(SCRAPER_CACHE_FILE, "r", encoding="utf-8") as f:
+                return set(json.load(f))
+        except Exception:
+            return set()
+    return set()
 
-# --- DISCORD BOT SETUP ---
+def save_scraper_cache(cache_set):
+    with open(SCRAPER_CACHE_FILE, "w", encoding="utf-8") as f:
+        json.dump(list(cache_set), f, indent=4)
+
+
+# --- DISCORD APPLICATION CLIENT BASE ---
 intents = discord.Intents.default()
 intents.message_content = True  
 intents.members = True          
-bot = commands.Bot(command_prefix="!", intents=intents) # Prefix kept as fallback
+bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
-    print(f"✅ Logged in as {bot.user.name}")
+    print(f"✅ Production node verified: {bot.user.name}")
     try:
         synced = await bot.tree.sync()
         print(f"🔄 Synced {len(synced)} slash commands globally.")
     except Exception as e:
         print(f"❌ Failed to sync slash commands: {e}")
+        
+    # Launch Background Automated Scraper Loop
+    if not auto_code_scraper_loop.is_running():
+        auto_code_scraper_loop.start()
+        print("📡 Background Automated Code Scraper Task Cycle engaged!")
 
 
-# --- CUSTOM PERMISSION CHECK ---
+# --- PERMISSIONS COMPLIANCE INTERCEPTS ---
 def is_admin_or_delegated():
     async def predicate(interaction: discord.Interaction) -> bool:
         if not interaction.guild:
@@ -92,7 +120,7 @@ def is_admin_or_delegated():
 
 
 # ==============================================================================
-# ADVANCED INTERACTIVE UI: SELECT MENU / DROP-DOWNS
+# DISCORD UI INTERACTION NODES (DROP-DOWNS)
 # ==============================================================================
 
 class HelpDropdown(discord.ui.Select):
@@ -107,25 +135,34 @@ class HelpDropdown(discord.ui.Select):
         super().__init__(placeholder="Select a module category...", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        if self.values == "📖 Bot Overview":
+        # Sleek Premium Palette System Styling
+        dark_blue = discord.Color.from_rgb(20, 24, 40)
+        dark_green = discord.Color.from_rgb(24, 40, 20)
+        dark_red = discord.Color.from_rgb(45, 15, 15)
+
+        # FIXED: self.values returns a list. We must check the first selected item using self.values[0]
+        selected_value = self.values[0]
+        embed = discord.Embed(title="Error", description="Unknown option selected.")
+
+        if selected_value == "📖 Bot Overview":
             embed = discord.Embed(
                 title="🤖 Asphalt Legends Fast Redeem Manual",
-                description="Welcome! This bot automates the processing of **Asphalt Legends Redeem Codes** directly inside your server community!",
-                color=discord.Color.blue()
+                description="Welcome! This system manages **Asphalt Legends Unite Redeem Codes** inside your server community!",
+                color=dark_blue
             )
-            embed.add_field(name="✨ Key Framework", value="• Register your player ID to receive automatic rewards roles.\n• Instantly maps pre-filled 1-click URL parameters to your DMs when drops occur!", inline=False)
+            embed.add_field(name="✨ Key Framework", value="• Register your player ID to receive automatic rewards roles.\n• Instantly maps pre-filled 1-click URL parameters to your DMs when drops occur!\n• Monitors community networks automatically to discover new codes 24/7.", inline=False)
             
-        elif self.values == "🎮 Player Commands":
-            embed = discord.Embed(title="🕹️ Player Commands Matrix", color=discord.Color.green())
+        elif selected_value == "🎮 Player Commands":
+            embed = discord.Embed(title="🕹️ Player Commands Matrix", color=dark_green)
             embed.add_field(name="`/set_id`", value="**Usage:** `/set_id player_id: <YOUR_ID>`\nRegisters your unique Asphalt game ID and assigns server drop alert roles.", inline=False)
             embed.add_field(name="`/toggle_dm`", value="Toggles direct message redeem link alerts ON or OFF.", inline=False)
             embed.add_field(name="`/delete_id`", value="Removes your data footprint completely and drops associated alert roles.", inline=False)
             embed.add_field(name="`/help` & `/commands`", value="Spawns this exact interactive selection panel UI.", inline=False)
             
-        elif self.values == "🛡️ Admin Utilities":
-            embed = discord.Embed(title="⚙️ Administrator Utilities Manual", color=discord.Color.red())
-            embed.add_field(name="`/setup`", value="**Usage:** `/setup announcement_channel: #ch register_roles: @r1, @r2 admin_role: @r`\nConfigures notification pipes, management authorities, and assigns multiple automated player reward roles.", inline=False)
-            embed.add_field(name="`/redeem`", value="**Usage:** `/redeem code: <code>`\nBlasts interactive 1-click links out to user DMs and logs to the configurations layout channel.", inline=False)
+        elif selected_value == "🛡️ Admin Utilities":
+            embed = discord.Embed(title="⚙️ Administrator Utilities Manual", color=dark_red)
+            embed.add_field(name="`/setup`", value="**Usage:** `/setup announcement_channel: #ch admin_role: @role player_role: @role`\nConfigures public notification channels, delegated management authorization groups, and target notification ping tags.", inline=False)
+            embed.add_field(name="`/redeem`", value="**Usage:** `/redeem code: <code>`\nBlasts interactive 1-click links out to user DMs and logs to the configurations layout channel manually.", inline=False)
             embed.add_field(name="`/listplayers`", value="Renders an overview checklist matrix of active server registrations.", inline=False)
             embed.add_field(name="`/test_code`", value="Fires an isolated test payload embed to verification configurations.", inline=False)
             embed.add_field(name="`/clearhistory`", value="Wipes out database information fields strictly isolated to this guild.", inline=False)
@@ -139,7 +176,119 @@ class HelpView(discord.ui.View):
 
 
 # ==============================================================================
-# MODERN SLASH COMMAND DECLARATIONS
+# AUTOMATED ACTION LOOP SCRAPER (REDDIT API AGENT)
+# ==============================================================================
+
+@tasks.loop(minutes=15)
+async def auto_code_scraper_loop():
+    """Monitors the web space asynchronously for new Asphalt promo drops."""
+    await bot.wait_until_ready()
+    url = "https://www.reddit.com/r/Asphalt9/new.json?limit=12"
+    headers = {"User-Agent": "DiscloudPlatinumAsphaltBot/3.0 (by /u/ProductionDeveloper)"}
+    
+    sent_cache = load_scraper_cache()
+    
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(url, headers=headers) as response:
+                if response.status != 200:
+                    return
+                
+                data = await response.json()
+                posts = data.get("data", {}).get("children", [])
+                
+                for post in posts:
+                    post_data = post.get("data", {})
+                    title = post_data.get("title", "").upper()
+                    selftext = post_data.get("selftext", "").upper()
+                    
+                    keywords = ["REDEEM CODE", "NEW CODE", "PROMO CODE", "FREE TOKENS", "REWARD CODE", "WORKING CODE", "UNITE CODE"]
+                    
+                    if any(kw in title for kw in keywords) or any(kw in selftext for kw in keywords):
+                        search_blob = f"{title} {selftext}"
+                        found_codes = CODE_PATTERN.findall(search_blob)
+                        
+                        for code in found_codes:
+                            if code in BLACKLISTED_WORDS:
+                                continue
+                                
+                            if code not in sent_cache:
+                                print(f"📡 Scraper Detected Fresh Global Code Matrix: {code}")
+                                sent_cache.add(code)
+                                save_scraper_cache(sent_cache)
+                                
+                                # Global Deployment Dispatch Loop
+                                await execute_global_automation_blast(code)
+                                
+        except Exception as e:
+            print(f"⚠️ Scraper telemetry loop error event: {e}")
+
+async def execute_global_automation_blast(code: str):
+    """Iterates through database footprints to announce auto-scraped keys globally."""
+    config = load_config()
+    data = load_data()
+    
+    public_color = discord.Color.from_rgb(230, 160, 15) # Warm Gold Accent
+    dm_color = discord.Color.from_rgb(40, 180, 70)      # High-Visibility Green
+    
+    for guild_id_str, guild_cfg in config.items():
+        guild = bot.get_guild(int(guild_id_str))
+        if not guild:
+            continue
+            
+        target_channel_id = guild_cfg.get("notification_channel")
+        player_role_id = guild_cfg.get("alert_role_id")
+        
+        if not target_channel_id:
+            continue
+            
+        target_channel = bot.get_channel(target_channel_id)
+        if not target_channel:
+            continue
+            
+        ping_string = f"<@&{player_role_id}>" if player_role_id else "@everyone"
+        
+        public_embed = discord.Embed(
+            title="🏎️ Automated Asphalt Legends Redeem Code! 🏎️",
+            description=f"🚨 **A new global redemption drop has been auto-detected!** 🚨\n\n**Redeem Code:** `{code.upper()}`",
+            color=public_color
+        )
+        public_embed.add_field(
+            name="__Claim Framework__",
+            value="Registered profiles: Check your direct messages for your custom pre-filled 1-click links!\n\nManual users claim here: [Gameloft Portal](https://www.gameloft.com/redeem/asphalt-legends-unite)",
+            inline=False
+        )
+        public_embed.set_footer(text="Automated Delivery Network • Claim quickly before limits are reached!")
+        
+        try:
+            await target_channel.send(content=ping_string, embed=public_embed)
+        except Exception:
+            continue
+            
+        # Process Individual Player DM Blasts for this specific guild
+        server_data = data.get(guild_id_str, {})
+        for u_id, info in server_data.items():
+            if not info.get("dm_enabled", True):
+                continue
+                
+            member = guild.get_member(int(u_id))
+            if member:
+                prefilled_url = f"https://www.gameloft.com/redeem/asphalt-legends-unite?playerId={info['player_id']}&code={code.upper()}"
+                dm_embed = discord.Embed(
+                    title="🏁 Auto-Filled Reward Pipeline 🏁",
+                    description=f"**Code:** `{code.upper()}`\n\nClick below to access the claim portal with your player credentials pre-mapped!",
+                    color=dm_color
+                )
+                dm_embed.add_field(name="__Dynamic Reward Portal__", value=f"[Click Here to Instantly Claim]({prefilled_url})")
+                try:
+                    await member.send(embed=dm_embed)
+                    await asyncio.sleep(0.3) # Throttle rate limit overhead splits safely
+                except Exception:
+                    pass
+
+
+# ==============================================================================
+# CORE SYSTEM SLASH COMMANDS
 # ==============================================================================
 
 @bot.tree.command(name="help", description="Tells the admins or players about what this bot does & how to use it.")
@@ -157,7 +306,7 @@ async def help_slash(interaction: discord.Interaction):
     embed = discord.Embed(
         title="🗂️ Help & System Documentation Center",
         description="Please select a documentation segment from the drop-down menu panel below to learn how to operate this engine module.",
-        color=discord.Color.blue()
+        color=discord.Color.from_rgb(20, 24, 40)
     )
     await interaction.response.send_message(embed=embed, view=HelpView(is_authorized), ephemeral=True)
 
@@ -177,27 +326,23 @@ async def commands_slash(interaction: discord.Interaction):
     embed = discord.Embed(
         title="🎮 Command Directory Manual",
         description="Select a module below to inspect arguments, usage parameters, and functional options.",
-        color=discord.Color.purple()
+        color=discord.Color.from_rgb(40, 20, 45)
     )
     await interaction.response.send_message(embed=embed, view=HelpView(is_authorized), ephemeral=False)
 
 
-@bot.tree.command(name="setup", description="Configure channels, administrators, and save up to 3 automatic player registration roles.")
+@bot.tree.command(name="setup", description="Configure the channel and specific target roles for administration and drops.")
 @app_commands.describe(
     announcement_channel="The destination text channel for public code announcements.",
-    admin_role="Sets a fallback role allowed to execute administrative bot commands.",
-    register_role_1="Primary role a user gets awarded when registering their game id.",
-    register_role_2="Second optional automated role awarded to verified players.",
-    register_role_3="Third optional automated role awarded to verified players."
+    admin_role="Exactly one management group role given permission to execute admin commands.",
+    player_role="Exactly one role that will be pinged and assigned to players on registration."
 )
 @is_admin_or_delegated()
 async def setup_slash(
     interaction: discord.Interaction,
     announcement_channel: discord.TextChannel,
     admin_role: discord.Role,
-    register_role_1: discord.Role,
-    register_role_2: discord.Role = None,
-    register_role_3: discord.Role = None
+    player_role: discord.Role
 ):
     guild_id = str(interaction.guild_id)
     config = load_config()
@@ -205,29 +350,31 @@ async def setup_slash(
     if guild_id not in config:
         config[guild_id] = {}
         
-    # Build list of active tier IDs
-    role_ids = [register_role_1.id]
-    role_mentions = [register_role_1.mention]
-    
-    if register_role_2:
-        role_ids.append(register_role_2.id)
-        role_mentions.append(register_role_2.mention)
-    if register_role_3:
-        role_ids.append(register_role_3.id)
-        role_mentions.append(register_role_3.mention)
-        
     config[guild_id]["notification_channel"] = announcement_channel.id
     config[guild_id]["bot_admin_role_id"] = admin_role.id
-    config[guild_id]["alert_role_ids"] = role_ids  # Saved as a list array inside configuration files
+    config[guild_id]["alert_role_id"] = player_role.id
     
     save_config(config)
     
-    embed = discord.Embed(title="⚙️ Configuration Setup Matrix Saved!", color=discord.Color.gold())
+    embed = discord.Embed(title="⚙️ Configuration Setup Matrix Saved!", color=discord.Color.from_rgb(200, 140, 10))
     embed.add_field(name="📢 Announcements Channel", value=announcement_channel.mention, inline=True)
-    embed.add_field(name="🛡️ Delegated Admin Authority", value=admin_role.mention, inline=True)
-    embed.add_field(name="🎭 Saved Registration Multi-Roles", value=", ".join(role_mentions), inline=False)
+    embed.add_field(name="🛡️ Master Admin Authority Role", value=admin_role.mention, inline=True)
+    embed.add_field(name="🔔 Player Alert Role Mention", value=player_role.mention, inline=False)
     
     await interaction.response.send_message(embed=embed)
+    
+    # --- INTERACTIVE SETUP VALIDATION FEEDBACK LOOP ---
+    mock_code = "UNITE2026"
+    test_embed = discord.Embed(
+        title="🏎️ Verification Stream: System Setup Live! 🏎️",
+        description=f"🤖 This is a pipeline verification test broadcast message.\n\n**Active Test Code Framework:** `{mock_code}`",
+        color=discord.Color.from_rgb(50, 120, 220)
+    )
+    test_embed.set_footer(text="Verification Loop Active • Connection Nodes Sync Operational.")
+    try:
+        await announcement_channel.send(content=f"{player_role.mention} System Online Verification Stream Checked Successfully.", embed=test_embed)
+    except discord.Forbidden:
+        await interaction.followup.send("⚠️ **Notice:** Configuration saved, but the bot lacks permission to type in that announcement channel!")
 
 
 # --- CONVERTED PLAYER UTILITIES ---
@@ -235,6 +382,12 @@ async def setup_slash(
 @bot.tree.command(name="set_id", description="Registers your unique Asphalt Game ID and applies saved server roles.")
 @app_commands.describe(player_id="Your authentic Asphalt game identity code (e.g., u-4a5b6c)")
 async def set_id_slash(interaction: discord.Interaction, player_id: str):
+    player_id = player_id.strip().lower()
+    
+    # Basic data structure normalization filter
+    if not player_id.startswith("u-"):
+        return await interaction.response.send_message("⚠️ **Format Exception:** Asphalt Game IDs must start with `u-` structure format syntax (e.g. `u-4a5b6c`). Check your profile card tab inside the app.", ephemeral=True)
+
     guild_id = str(interaction.guild_id)
     user_id = str(interaction.user.id)
     
@@ -253,25 +406,18 @@ async def set_id_slash(interaction: discord.Interaction, player_id: str):
     }
     save_data(data)
     
-    # Process multi-role adjustments
-    saved_role_ids = config.get(guild_id, {}).get("alert_role_ids", [])
-    assigned_mentions = []
-    failed_flag = False
+    saved_role_id = config.get(guild_id, {}).get("alert_role_id")
+    role_msg = ""
     
-    if saved_role_ids:
-        for r_id in saved_role_ids:
-            role = interaction.guild.get_role(int(r_id))
-            if role:
-                try:
-                    await interaction.user.add_roles(role)
-                    assigned_mentions.append(role.mention)
-                except discord.Forbidden:
-                    failed_flag = True
-    
-    role_msg = f" & assigned roles: {', '.join(assigned_mentions)}" if assigned_mentions else ""
-    if failed_flag:
-        role_msg += " *(⚠️ Notice: Some roles could not be assigned due to hierarchy settings)*"
-        
+    if saved_role_id:
+        role = interaction.guild.get_role(int(saved_role_id))
+        if role:
+            try:
+                await interaction.user.add_roles(role)
+                role_msg = f" and assigned target tier role: {role.mention}"
+            except discord.Forbidden:
+                role_msg = " *(⚠️ Notice: System role configuration could not be bound due to permission hierarchy setting configurations)*"
+                
     await interaction.response.send_message(
         f"✅ Linked Asphalt ID: **{player_id}** to {interaction.user.mention}{role_msg}\n"
         f"🔔 DM Alerts: {'**ON**' if current_dm_pref else '**OFF**'}"
@@ -290,21 +436,18 @@ async def delete_id_slash(interaction: discord.Interaction):
             del data[guild_id]
         save_data(data)
         
-        # Loop through saved configurations array to strip roles away
-        saved_role_ids = config.get(guild_id, {}).get("alert_role_ids", [])
-        removed_names = []
+        saved_role_id = config.get(guild_id, {}).get("alert_role_id")
+        role_message = "."
         
-        if saved_role_ids:
-            for r_id in saved_role_ids:
-                role = interaction.guild.get_role(int(r_id))
-                if role and role in interaction.user.roles:
-                    try:
-                        await interaction.user.remove_roles(role)
-                        removed_names.append(role.name)
-                    except Exception:
-                        pass
+        if saved_role_id:
+            role = interaction.guild.get_role(int(saved_role_id))
+            if role and role in interaction.user.roles:
+                try:
+                    await interaction.user.remove_roles(role)
+                    role_message = f" and cleared your server role group **{role.name}**."
+                except Exception:
+                    pass
                         
-        role_message = f" and cleared permissions for: **{', '.join(removed_names)}**." if removed_names else "."
         await interaction.response.send_message(f"❌ {interaction.user.mention}, your player database profiling asset was dropped{role_message}")
     else:
         await interaction.response.send_message("⚠️ No player entry footprint located matching your account signature.", ephemeral=True)
@@ -327,7 +470,7 @@ async def toggle_dm_slash(interaction: discord.Interaction):
     await interaction.response.send_message(f"🔔 DM alerts changed to **{status}** for {interaction.user.mention}.")
 
 
-# --- CONVERTED ADMIN UTILITIES ---
+# --- CONVERTED MANUAL ADMIN UTILITIES ---
 
 @bot.tree.command(name="clearhistory", description="Wipes out the entire registration database for this guild.")
 @is_admin_or_delegated()
@@ -351,7 +494,7 @@ async def listplayers_slash(interaction: discord.Interaction):
     if not server_data:
         return await interaction.response.send_message("🧹 **Guild registration profile index is currently blank.**", ephemeral=True)
     
-    embed = discord.Embed(title=f"📋 Registered Profiles: {interaction.guild.name}", color=discord.Color.blue())
+    embed = discord.Embed(title=f"📋 Registered Profiles: {interaction.guild.name}", color=discord.Color.from_rgb(30, 90, 160))
     for disc_id, info in server_data.items():
         pref = "✅ Enabled" if info.get("dm_enabled", True) else "❌ Disabled"
         embed.add_field(name=f"User: {info['username']}", value=f"**Game ID:** `{info['player_id']}` | **DMs:** {pref}", inline=False)
@@ -370,9 +513,9 @@ async def test_code_slash(interaction: discord.Interaction):
         return await interaction.response.send_message("⚠️ Link your game profile through `/set_id` inside this server environment first before running telemetry metrics.", ephemeral=True)
     
     info = data[guild_id][user_id]
-    prefilled_url = f"https://www.gameloft.com/redeem/asphalt-legends?playerId={info['player_id']}&code=TEST12345"
+    prefilled_url = f"https://www.gameloft.com/redeem/asphalt-legends-unite?playerId={info['player_id']}&code=TEST12345"
     
-    embed = discord.Embed(title="🧪 Isolated Delivery Telemetry Test", description="Testing dynamic string injection interfaces.\n\n**Code:** `TEST12345`", color=discord.Color.orange())
+    embed = discord.Embed(title="🧪 Isolated Delivery Telemetry Test", description="Testing dynamic string injection interfaces.\n\n**Code:** `TEST12345`", color=discord.Color.from_rgb(220, 100, 20))
     embed.add_field(name="__Pre-filled Claim URL__", value=f"[Open Gameloft Web Portal]({prefilled_url})")
     
     try:
@@ -389,7 +532,7 @@ async def redeem_slash(interaction: discord.Interaction, code: str):
     config = load_config()
     guild_id = str(interaction.guild_id)
     target_channel_id = config.get(guild_id, {}).get("notification_channel")
-    saved_role_ids = config.get(guild_id, {}).get("alert_role_ids", [])
+    player_role_id = config.get(guild_id, {}).get("alert_role_id")
     
     if not target_channel_id:
         return await interaction.response.send_message("⚠️ Announcement pipes are unconfigured. Please run `/setup` first to link structural nodes.", ephemeral=True)
@@ -398,25 +541,22 @@ async def redeem_slash(interaction: discord.Interaction, code: str):
     if not target_channel:
         return await interaction.response.send_message("⚠️ Targeted logging infrastructure channel could not be resolved.", ephemeral=True)
     
-    # Generate multi-role notification pings if applicable
-    ping_string = " ".join([f"<@&{r_id}>" for r_id in saved_role_ids]) if saved_role_ids else "@everyone"
-    
+    ping_string = f"<@&{player_role_id}>" if player_role_id else "@everyone"
     data = load_data()
     server_data = data.get(guild_id, {})
     
     public_embed = discord.Embed(
         title="🏎️ New Asphalt Legends Redeem Code! 🏎️",
         description=f"🚨 **A new global redemption drop has broken!** 🚨\n\n**Redeem Code:** `{code.upper()}`",
-        color=discord.Color.gold()
+        color=discord.Color.from_rgb(230, 160, 15)
     )
     public_embed.add_field(
         name="__Claim Framework__",
-        value="Registered profiles: Stand by for custom pre-filled 1-click links arriving inside your direct message systems!\n\nManual users claim here: [Gameloft Portal](https://www.gameloft.com/redeem/asphalt-legends)",
+        value="Registered profiles: Stand by for custom pre-filled 1-click links arriving inside your direct message systems!\n\nManual users claim here: [Gameloft Portal](https://www.gameloft.com/redeem/asphalt-legends-unite)",
         inline=False
     )
     public_embed.set_footer(text="Warning: Active redemption caps or timeline expirations apply!")
     
-    # Defer immediate response to manage delivery processing overhead loops safely
     await interaction.response.defer(ephemeral=True)
     await target_channel.send(content=ping_string, embed=public_embed)
     
@@ -428,11 +568,11 @@ async def redeem_slash(interaction: discord.Interaction, code: str):
             
         member = interaction.guild.get_member(int(u_id))
         if member:
-            prefilled_url = f"https://www.gameloft.com/redeem/asphalt-legends?playerId={info['player_id']}&code={code.upper()}"
+            prefilled_url = f"https://www.gameloft.com/redeem/asphalt-legends-unite?playerId={info['player_id']}&code={code.upper()}"
             dm_embed = discord.Embed(
                 title="🏁 Auto-Filled Reward Pipeline 🏁",
                 description=f"**Code:** `{code.upper()}`\n\nClick the element below to access the claim portal with your player credentials pre-mapped!",
-                color=discord.Color.green()
+                color=discord.Color.from_rgb(40, 180, 70)
             )
             dm_embed.add_field(name="__Dynamic Reward Portal__", value=f"[Click Here to Instantly Claim]({prefilled_url})")
             try:
