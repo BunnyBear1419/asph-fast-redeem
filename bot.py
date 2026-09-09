@@ -569,3 +569,4 @@ if not token or token == "YOUR_TOKEN_HERE":
     print("❌ ERROR: Missing credential keys mapping token configurations variables.")
 else: 
     bot.run(token)
+ 
