@@ -111,6 +111,8 @@ class HelpDropdown(discord.ui.Select):
         super().__init__(placeholder="Select system segment...", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        
         guild_id = str(interaction.guild_id)
         loop = asyncio.get_event_loop()
         cfg_res = await loop.run_in_executor(None, lambda: guild_config_col.find_one({"guild_id": guild_id}))
@@ -137,7 +139,7 @@ class HelpDropdown(discord.ui.Select):
             embed.set_thumbnail(url=thumb)
             embed.add_field(name="`/setup` | `/redeem` | `/listplayers` | `/diagnose` | `/admin_restore`", value="Master administration commands module workspace console tools.", inline=False)
 
-        await interaction.response.edit_message(embed=embed, view=self.view)
+        await interaction.followup.edit_message(message_id=interaction.message.id, embed=embed, view=self.view)
 
 class HelpView(discord.ui.View):
     def __init__(self, show_admin_docs: bool):
@@ -260,7 +262,7 @@ async def execute_global_automation_blast(code: str):
         for p_info in players_by_guild.get(guild_id_str, []):
             member = guild.get_member(int(p_info["user_id"]))
             if member:
-                prefilled_url = f"https://gameloft.com{p_info['player_id']}&code={code.upper()}"
+                prefilled_url = f"https://asphaltlegendsunite.com/redeem?player_id={p_info['player_id']}&code={code.upper()}"
                 dm_embed = discord.Embed(title="🏁 Reward Pipeline Link Online", description=f"Code: `{code.upper()}`", color=discord.Color.from_rgb(14, 21, 46))
                 dm_embed.add_field(name="Link", value=f"[Claim Reward Instantly]({prefilled_url})")
                 try:
@@ -382,7 +384,7 @@ async def history_slash(interaction: discord.Interaction):
     embed = discord.Embed(title="🏁 Expanded Redemption Drop History (Last 10)", color=discord.Color.from_rgb(14, 21, 46))
     for idx, row in enumerate(cache_res, 1):
         code = row["code"]
-        manual_url = f"https://asphaltlegendsunite.com{code}"
+        manual_url = f"https://asphaltlegendsunite.com/redeem?code={code}"
         embed.add_field(name=f"{idx}. Code: `{code}`", value=f"🔗 [Claim Shortcut Link]({manual_url})", inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -410,7 +412,6 @@ async def diagnose_slash(interaction: discord.Interaction):
     latency = round(bot.latency * 1000) if bot.latency and not str(bot.latency).isalpha() else 0
     loop = asyncio.get_event_loop()
     
-    # Trace exactly what environment parameters Discloud is feeding the application
     raw_env_uri = os.environ.get("MONGO_URI", "NOT_FOUND_USING_CODE_FALLBACK")
     masked_uri = "Code Fallback Safe" if raw_env_uri == "NOT_FOUND_USING_CODE_FALLBACK" else f"...{raw_env_uri[-25:]}"
 
@@ -569,4 +570,3 @@ if not token or token == "YOUR_TOKEN_HERE":
     print("❌ ERROR: Missing credential keys mapping token configurations variables.")
 else: 
     bot.run(token)
- 
