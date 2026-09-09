@@ -65,7 +65,7 @@ USER_AGENTS = [
 # ==============================================================================
 MONGO_URI = os.environ.get(
     "MONGO_URI", 
-    "mongodb+srv://aubreya100114_db_user:DeVQIH0mVoez3XjL@cluster0.qoxyjym.mongodb.net/asphalt_bot_db?appName=Cluster0"
+    "mongodb+srv://aubreya100114_db_user:9EPtT0nidEZEkz6p@cluster0.qoxyjym.mongodb.net/asphalt_bot_db?retryWrites=true&w=majority"
 )
 MONGO_DB_NAME = os.environ.get("MONGO_DB_NAME", "asphalt_bot_db")
 
