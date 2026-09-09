@@ -63,11 +63,11 @@ USER_AGENTS = [
 # ==============================================================================
 # SECTION 4: MONGODB CONNECTIONS UTILITIES
 # ==============================================================================
-MONGO_URI = os.environ.get(
-    "MONGO_URI", 
-    "mongodb+srv://aubreya100114_db_user:9EPtT0nidEZEkz6p@cluster0.qoxyjym.mongodb.net/asphalt_bot_db?retryWrites=true&w=majority"
-)
+MONGO_URI = os.environ.get("MONGO_URI")
 MONGO_DB_NAME = os.environ.get("MONGO_DB_NAME", "asphalt_bot_db")
+
+if not MONGO_URI:
+    raise ValueError("❌ CRITICAL ERROR: The 'MONGO_URI' variable is missing from Discloud Environment Variables!")
 
 mongo_client = MongoClient(MONGO_URI)
 db = mongo_client[MONGO_DB_NAME]
