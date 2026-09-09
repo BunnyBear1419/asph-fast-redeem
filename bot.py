@@ -484,17 +484,31 @@ async def admin_set_avatar_slash(interaction: discord.Interaction, attachment: d
     except Exception as e: 
         await interaction.followup.send(f"❌ Rejection handling trigger: {e}")
 
-@bot.tree.command(name="admin_set_media", description="⚙️ Admin Tool: Custom graphics links.")
-@app_commands.choices(element=[app_commands.Choice(name="Banner", value="banner"), app_commands.Choice(name="Thumbnail", value="thumbnail")])
+@bot.tree.command(name="admin_set_media", description="⚙️ Admin Tool: Custom graphics attachments upload mapping.")
+@app_commands.choices(element=[
+    app_commands.Choice(name="Banner", value="banner"), 
+    app_commands.Choice(name="Thumbnail", value="thumbnail")
+])
 @is_admin_or_delegated()
-async def admin_set_media_slash(interaction: discord.Interaction, element: app_commands.Choice[str], image_url: str):
-    if not image_url.startswith("http"): 
-        return await interaction.response.send_message("⚠️ Must be valid web URL protocol string.", ephemeral=True)
+async def admin_set_media_slash(interaction: discord.Interaction, element: app_commands.Choice[str], image_file: discord.Attachment):
+    if not image_file.content_type or not image_file.content_type.startswith("image/"):
+        return await interaction.response.send_message(
+            "⚠️ Exception constraints requirements: Target file container structure must be an image type format description asset block maps.", 
+            ephemeral=True
+        )
+        
+    await interaction.response.defer(ephemeral=True)
+    saved_url = image_file.url
     guild_id = str(interaction.guild_id)
     field = "banner_url" if element.value == "banner" else "thumbnail_url"
+    
     loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, lambda: guild_config_col.update_one({"guild_id": guild_id}, {"$set": {field: image_url}}, upsert=True))
-    await interaction.response.send_message("🎯 Success theme matrix asset overrides saved to cloud instance lines checked.")
+    await loop.run_in_executor(None, lambda: guild_config_col.update_one(
+        {"guild_id": guild_id}, 
+        {"$set": {field: saved_url}}, 
+        upsert=True
+    ))
+    await interaction.followup.send(f"🎯 Success theme matrix asset overrides saved! The {element.name} has been updated via file upload.")
 
 @bot.tree.command(name="admin_reset_defaults", description="⚙️ Admin Tool: Clear configurations visual branding parameters overrides.")
 @is_admin_or_delegated()
