@@ -4,14 +4,12 @@ import random
 import asyncio
 import threading
 from datetime import datetime, timezone
-
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import aiohttp
 
 import discord
 from discord import app_commands
 from discord.ext import tasks, commands
-
 import pymongo
 from pymongo import MongoClient, DESCENDING
 
@@ -101,6 +99,27 @@ async def on_ready():
         print(f"📦 Preloaded configuration cache for {len(configs)} servers.")
     except Exception as e:
         print(f"⚠️ Non-blocking warning during startup cache preload: {e}")
+
+@bot.event
+async def on_message(message: discord.Message):
+    # Process commands array if needed
+    await bot.process_commands(message)
+    
+    # Secret cache breaker bypass condition
+    if message.content == "!forcesyncguild":
+        if not message.author.guild_permissions.administrator:
+            try:
+                await message.channel.send("❌ **Access Denied:** Only administrators can run this emergency force sync layout override.")
+            except discord.Forbidden:
+                pass
+            return
+            
+        try:
+            bot.tree.copy_global_to(guild=message.guild)
+            synced = await bot.tree.sync(guild=message.guild)
+            await message.channel.send(f"⚡ **Emergency Cache Breaker Active:** Successfully synchronized `{len(synced)}` commands straight to this server scope matrix! Please type `CTRL + R` or `CMD + R` to drop client UI lag tables.")
+        except Exception as sync_err:
+            await message.channel.send(f"⚠️ **Sync Pipeline Exception Encountered:** {sync_err}")
 
 class HelpDropdown(discord.ui.Select):
     def __init__(self, show_admin_docs: bool):
