@@ -316,7 +316,7 @@ async def broadcast_code_to_dms(code: str, target_guild_id_str: str = None):
                     continue
                     
             if member:
-                prefilled_url = f"https://www.gameloft.com/redeem/asphalt-legends?player_id={p_info['player_id']}&code={code.upper()}"
+                prefilled_url = f"https://www.gameloft.com/redeem/asphalt-legends?user_id={p_info['player_id']}&code={code.upper()}"
                 dm_embed = discord.Embed(
                     title="🏁 Reward Pipeline Notification: Link Online", 
                     description=f"A fresh voucher code has matched your player registry matrix. Click the button mapping below to process immediate claiming actions.", 
@@ -486,7 +486,7 @@ async def set_id_slash(interaction: discord.Interaction, player_id: str):
         if recent_codes and current_dm_pref:
             for item in recent_codes:
                 c_val = item["code"]
-                prefilled_url = f"https://www.gameloft.com/redeem/asphalt-legends?player_id={player_id}&code={c_val.upper()}"
+                prefilled_url = f"https://www.gameloft.com/redeem/asphalt-legends?user_id={player_id}&code={c_val.upper()}"
                 
                 onboard_embed = discord.Embed(
                     title="🏁 Retroactive Reward Backlog Dispatched!",
