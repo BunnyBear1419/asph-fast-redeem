@@ -3,6 +3,7 @@ import re
 import random
 import asyncio
 import threading
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import aiohttp
@@ -228,44 +229,43 @@ class ConfirmClearHistoryView(discord.ui.View):
 async def auto_code_scraper_loop():
     await bot.wait_until_ready()
     async with aiohttp.ClientSession() as session:
-        reddit_targets = [
-            "https://reddit.com",
-            "https://reddit.com"
+        rss_targets = [
+            "https://old.reddit.com/r/AsphaltLegendsUnite/new/.rss",
+            "https://old.reddit.com/r/Asphalt9/new/.rss"
         ]
-        for url in reddit_targets:
-            headers = {"User-Agent": random.choice(USER_AGENTS)}
+        
+        for url in rss_targets:
+            headers = {
+                "User-Agent": random.choice(USER_AGENTS),
+                "Accept": "application/rss+xml, application/xml;q=0.9, */*;q=0.8"
+            }
             try:
-                async with session.get(url, headers=headers, timeout=10) as response:
+                async with session.get(url, headers=headers, timeout=12) as response:
                     if response.status == 200:
-                        data = await response.json()
-                        for post in data.get("data", {}).get("children", []):
-                            p_data = post.get("data", {})
-                            search_blob = f"{p_data.get('title', '')} {p_data.get('selftext', '')}".upper()
+                        xml_data = await response.text()
+                        
+                        root = ET.fromstring(xml_data)
+                        ns = {'atom': 'http://www.w3.org/2005/Atom'}
+                        
+                        for entry in root.findall('atom:entry', ns):
+                            title = entry.find('atom:title', ns)
+                            content = entry.find('atom:content', ns)
+                            
+                            title_text = title.text if title is not None else ""
+                            content_text = content.text if content is not None else ""
+                            
+                            search_blob = f"{title_text} {content_text}".upper()
                             await process_text_and_blast(search_blob)
             except Exception as e:
-                print(f"⚠️ Background Scraper Log: Reddit API check delay or block on target link: {e}")
-            await asyncio.sleep(2)
-        try:
-            gameloft_url = "https://asphaltlegends.com"
-            headers = {"User-Agent": random.choice(USER_AGENTS)}
-            async with session.get(gameloft_url, headers=headers, timeout=10) as response:
-                if response.status == 200:
-                    try:
-                        news_data = await response.json()
-                        for article in news_data.get("articles", []):
-                            search_blob = f"{article.get('title', '')} {article.get('description', '')}".upper()
-                            await process_text_and_blast(search_blob)
-                    except Exception:
-                        html_text = await response.text()
-                        await process_text_and_blast(html_text.upper())
-        except Exception as e:
-            print(f"⚠️ Background Scraper Log: Gameloft parsing platform layout check update skip: {e}")
+                print(f"⚠️ RSS Scraper Vector Matrix Delay Note on URL ({url}): {e}")
+            await asyncio.sleep(3)
 
 async def process_text_and_blast(search_blob: str):
     keywords = [
         "REDEEM CODE", "NEW CODE", "PROMO CODE", "FREE TOKENS", 
         "REWARD CODE", "WORKING CODE", "UNITE CODE", "GIFT CODE",
-        "SEASON CODE", "CLAIM CODE", "FREEBIE", "PROMOCODE", "REDEEMCODE"
+        "SEASON CODE", "CLAIM CODE", "FREEBIE", "PROMOCODE", "REDEEMCODE",
+        "NEW REDEEM", "ASPHALTLEGOBMW", "LIMITED TIME", "PORTAL ACTIVE"
     ]
     if any(kw in search_blob for kw in keywords):
         for code in CODE_PATTERN.findall(search_blob):
@@ -505,7 +505,7 @@ async def redeem_slash(interaction: discord.Interaction, code: str):
     public_embed = discord.Embed(title="🏁 MANUAL REWARDS REDEEM CODE ALERT 🏁", description=f"An administrative reward drop has occurred!\n\n**PROMO CODE:**\n```📬 {code.upper()} ```\n\n[Launch Official Redeem Portal](https://asphaltlegendsunite.com)", color=discord.Color.from_rgb(14, 21, 46))
     public_embed.set_image(url=cfg_res.get("banner_url", DEFAULT_BANNER))
     await target_channel.send(embed=public_embed)
-    await interaction.followup.send("Base public drop notifications dispatched successfully across connected servers loops nodes links channels.")
+    await interaction.followup.send("✅ Public drop notifications dispatched successfully across connected servers loops nodes links channels.")
 
 @bot.tree.command(name="listplayers", description="📋 Admin Tool: Displays active membership profiling registration lists.")
 @is_admin_or_delegated()
