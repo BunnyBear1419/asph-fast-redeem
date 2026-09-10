@@ -576,15 +576,32 @@ async def diagnose_slash(interaction: discord.Interaction):
     embed.add_field(name="📊 Guild Active Profiles Registry Count", value=f"`{prof_count} Live Entries`", inline=False)
     await interaction.followup.send(embed=embed, ephemeral=True)
 
-@bot.tree.command(name="sync", description="🔄 Admin Tool: Forces an immediate refresh tree sync mapping system parameters across Discord.")
+@bot.tree.command(name="sync", description="🔄 Forces a direct refresh sync tree mapping parameters across Discord structures.")
+@app_commands.choices(scope=[
+    app_commands.Choice(name="Global (Update Everywhere - Takes time)", value="global"),
+    app_commands.Choice(name="This Server Only (Instant Wipe & Update)", value="guild"),
+    app_commands.Choice(name="Purge/Clear This Server's Cache", value="clear_guild")
+])
 @is_admin_or_delegated()
-async def sync_slash(interaction: discord.Interaction):
+async def sync_slash(interaction: discord.Interaction, scope: app_commands.Choice[str]):
     await interaction.response.defer(ephemeral=True)
     try:
-        await bot.tree.sync()
-        await interaction.followup.send("🎯 Application Slash Directory Sync Complete: Commands synchronized successfully globally.")
+        if scope.value == "global":
+            synced = await bot.tree.sync()
+            await interaction.followup.send(f"🎯 **Global Sync Dispatched:** Synced `{len(synced)}` commands across standard endpoints. (Discord may take up to an hour to populate).")
+            
+        elif scope.value == "guild":
+            bot.tree.copy_global_to(guild=interaction.guild)
+            synced = await bot.tree.sync(guild=interaction.guild)
+            await interaction.followup.send(f"⚡ **Instant Server Sync Complete:** Pushed `{len(synced)}` commands directly to this server layout.")
+            
+        elif scope.value == "clear_guild":
+            bot.tree.clear_commands(guild=interaction.guild)
+            await bot.tree.sync(guild=interaction.guild)
+            await interaction.followup.send("🧹 **Server Purge Successful:** Completely scrubbed local guild overlays. Try reloading Discord now.")
+            
     except Exception as e:
-        await interaction.followup.send(f"❌ Sync Exception Encountered: {e}", ephemeral=True)
+        await interaction.followup.send(f"❌ **Sync Exception Encountered:** {e}", ephemeral=True)
 
 if __name__ == "__main__":
     token = os.environ.get("DISCORD_BOT_TOKEN")
