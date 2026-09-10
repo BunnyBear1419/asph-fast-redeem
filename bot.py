@@ -177,8 +177,7 @@ class HelpDropdown(discord.ui.Select):
                     "📝 `/help` - Launches this comprehensive interactive dropdown options navigation system map.\n"
                     "🔑 `/set_id [player_id]` - Links your custom Asphalt Player ID structure to your account data. **Requires format `u-` to register properly.** Enrolls you in premium priority DM notifications layers.\n"
                     "🔔 `/toggle_dm` - Dynamically toggles your private direct message rewards delivery pipeline channel **ON** or **OFF** instantly.\n"
-                    "🗑️ `/delete_id` - Completely scrubs your personal registration metadata profile card from the global storage vaults.\n"
-                    "📜 `/history` - Queries database registers to list the **top 10 most recent verified vouchers** captured by the background hunting matrix."
+                    "🗑️ `/delete_id` - Completely scrubs your personal registration metadata profile card from the global storage vaults."
                 ),
                 color=discord.Color.from_rgb(14, 21, 46)
             )
@@ -316,7 +315,8 @@ async def broadcast_code_to_dms(code: str, target_guild_id_str: str = None):
                     continue
                     
             if member:
-                prefilled_url = f"https://www.gameloft.com/redeem/asphalt-legends?user_id={p_info['player_id']}&code={code.upper()}"
+                # FIXED: Parameter key transformed to player_id to fit Gameloft's input validation routing
+                prefilled_url = f"https://www.gameloft.com/redeem/asphalt-legends?player_id={p_info['player_id']}&code={code.upper()}"
                 dm_embed = discord.Embed(
                     title="🏁 Reward Pipeline Notification: Link Online", 
                     description=f"A fresh voucher code has matched your player registry matrix. Click the button mapping below to process immediate claiming actions.", 
@@ -480,31 +480,7 @@ async def set_id_slash(interaction: discord.Interaction, player_id: str):
                 
     dm_status_str = "ON" if current_dm_pref else "OFF"
     await interaction.response.send_message(f"✅ Linked Asphalt ID: **{player_id}**\n🔔 Private DM Alerts Status: **{dm_status_str}**")
-
-    try:
-        recent_codes = await loop.run_in_executor(None, lambda: list(scraper_cache_col.find({}).sort("detected_at", DESCENDING).limit(3)))
-        if recent_codes and current_dm_pref:
-            for item in recent_codes:
-                c_val = item["code"]
-                prefilled_url = f"https://www.gameloft.com/redeem/asphalt-legends?user_id={player_id}&code={c_val.upper()}"
-                
-                onboard_embed = discord.Embed(
-                    title="🏁 Retroactive Reward Backlog Dispatched!",
-                    description="Welcome to the priority tracking layer! Here is an active code found in our system historical indexes prefilled for your convenience.",
-                    color=discord.Color.from_rgb(14, 21, 46)
-                )
-                onboard_embed.add_field(name="🔑 Target Code", value=f"`{c_val.upper()}`", inline=True)
-                onboard_embed.add_field(name="🆔 Linked Account ID", value=f"`{player_id}`", inline=True)
-                
-                v_btn = discord.ui.View()
-                v_btn.add_item(discord.ui.Button(label="🚀 Speed-Redeem Link", url=prefilled_url, style=discord.ButtonStyle.link))
-                try:
-                    await interaction.user.send(embed=onboard_embed, view=v_btn)
-                    await asyncio.sleep(0.2)
-                except discord.Forbidden:
-                    break
-    except Exception as e:
-        print(f"⚠️ Non-blocking issue running onboarding backlog dispatcher: {e}")
+    # REMOVED: Historic backlog drop execution routine loop deleted completely from code matrix layout.
 
 @bot.tree.command(name="delete_id", description="🗑️ Public Tool: Unlink and scrub your profile data completely from cluster ledgers.")
 async def delete_id_slash(interaction: discord.Interaction):
@@ -529,21 +505,6 @@ async def toggle_dm_slash(interaction: discord.Interaction):
     new_pref = not prof_check.get("dm_enabled", True)
     await loop.run_in_executor(None, lambda: player_profiles_col.update_one({"guild_id": guild_id, "user_id": user_id}, {"$set": {"dm_enabled": new_pref}}))
     await interaction.response.send_message(f"🔔 DM notification delivery preferences altered: Alerts turned **{'ON' if new_pref else 'OFF'}**.")
-
-@bot.tree.command(name="history", description="📜 Public Tool: Lists the last 10 discovered reward vouchers logs.")
-async def history_slash(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=True)
-    loop = asyncio.get_event_loop()
-    cache_res = await loop.run_in_executor(None, lambda: list(scraper_cache_col.find({}).sort("detected_at", DESCENDING).limit(10)))
-    if not cache_res:
-        return await interaction.followup.send("🗂️ Verification Note: History indexes matching tracking parameters are empty.", ephemeral=True)
-        
-    embed = discord.Embed(title="🏁 Expanded Redemption Drop History (Last 10 Records)", color=discord.Color.from_rgb(14, 21, 46))
-    for idx, row in enumerate(cache_res, 1):
-        code = row["code"]
-        manual_url = f"https://www.gameloft.com/redeem/asphalt-legends?code={code}"
-        embed.add_field(name=f"{idx}. Code Entry Parameters: `{code}`", value=f"🔗 [Launch Claim Portal Shortcut]({manual_url})", inline=False)
-    await interaction.followup.send(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="setup", description="🛠️ Admin Tool: Configure notification target channels, manager clearings, and player pings.")
 @is_admin_or_delegated()
