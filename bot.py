@@ -36,7 +36,7 @@ def run_web_server():
 
 threading.Thread(target=run_web_server, daemon=True).start()
 
-CODE_PATTERN = re.compile(r'\b[A-Za-z0-9_-]{6,16}\b')
+CODE_PATTERN = re.compile(r'\\b[A-Za-z0-9_-]{6,16}\\b')
 
 BLACKLISTED_WORDS = {
     "REDEEM", "TOKENS", "CREDITS", "ASPHALT", "UNITE", 
@@ -141,10 +141,9 @@ async def on_command_error(ctx, error):
     raise error
 
 def is_valid_image_url(url: str) -> bool:
-    """Ensures URLs actually point directly to an image asset context to prevent Discord payload API silent rejections."""
+    \"\"\"Ensures URLs actually point directly to an image asset context to prevent Discord payload API silent rejections.\"\"\"
     if not url or not isinstance(url, str):
         return False
-    # Verifies link formatting incorporates standard asset extensions or direct discord/imgur media paths
     if url.startswith("https://imgur.com") and not (url.endswith(".png") or url.endswith(".jpg") or url.endswith(".jpeg") or url.endswith(".gif")):
         return False
     return url.startswith(("http://", "https://"))
@@ -179,11 +178,11 @@ class HelpDropdown(discord.ui.Select):
                     title="ℹ️ System Architecture & Operations Overview",
                     description=(
                         "This integration provides an advanced, automated notification network designed to solve "
-                        "reward voucher lookup bottlenecks across the community infrastructure.\n\n"
-                        "**Core Engine Blueprint:**\n"
-                        "🔹 **Background Automated Scraper:** Wakeful task loops run quietly **every 5 minutes** executing non-blocking scrape routines across multi-site target vectors.\n"
-                        "🔹 **Target Constraints Narrowing:** Filters analyze content blocks exclusively targeting **Asphalt Legends Unite** rewards metrics layout patterns.\n"
-                        "🔹 **Smart Deduplication Pipeline:** Discovered strings match against database indexes to completely discard duplicate elements before alert delivery.\n"
+                        "reward voucher lookup bottlenecks across the community infrastructure.\\n\\n"
+                        "**Core Engine Blueprint:**\\n"
+                        "🔹 **Background Automated Scraper:** Wakeful task loops run quietly **every 5 minutes** executing non-blocking scrape routines across multi-site target vectors.\\n"
+                        "🔹 **Target Constraints Narrowing:** Filters analyze content blocks exclusively targeting **Asphalt Legends Unite** rewards metrics layout patterns.\\n"
+                        "🔹 **Smart Deduplication Pipeline:** Discovered strings match against database indexes to completely discard duplicate elements before alert delivery.\\n"
                         "🔹 **Instant Direct Delivery Mapping:** Links prefill user credentials, sending registered players straight to Gameloft active portals with zero manual typing requirements."
                     ),
                     color=discord.Color.from_rgb(14, 21, 46)
@@ -194,10 +193,10 @@ class HelpDropdown(discord.ui.Select):
                 embed = discord.Embed(
                     title="🕹️ Player Utilities & Manifest Commands Index",
                     description=(
-                        "Universal commands available to all community members:\n\n"
-                        "📝 `/help` - Launches this comprehensive interactive dropdown options navigation system map.\n"
-                        "🔑 `/set_id [player_id]` - Links your custom Asphalt Player ID structure to your account data. **Requires format `u-` to register properly.** Enrolls you in premium priority DM notifications layers.\n"
-                        "🔔 `/toggle_dm` - Dynamically toggles your private direct message rewards delivery pipeline channel **ON** or **OFF** instantly.\n"
+                        "Universal commands available to all community members:\\n\\n"
+                        "📝 `/help` - Launches this comprehensive interactive dropdown options navigation system map.\\n"
+                        "🔑 `/set_id [player_id]` - Links your custom Asphalt Player ID structure to your account data. **Requires format `u-` to register properly.** Enrolls you in premium priority DM notifications layers.\\n"
+                        "🔔 `/toggle_dm` - Dynamically toggles your private direct message rewards delivery pipeline channel **ON** or **OFF** instantly.\\n"
                         "🗑️ `/delete_id` - Completely scrubs your personal registration metadata profile card from the global storage vaults."
                     ),
                     color=discord.Color.from_rgb(14, 21, 46)
@@ -208,13 +207,13 @@ class HelpDropdown(discord.ui.Select):
                 embed = discord.Embed(
                     title="⚙️ Master Administration Workspace & Controls Console",
                     description=(
-                        "Management systems overrides restricted to designated server roles parameters:\n\n"
-                        "🛠️ `/setup [channel] [admin_role] [player_role]` - Maps target reward notification drop streams, sets your base alert role ping configurations, and authorizes access keys.\n"
-                        "📢 `/redeem [code]` - Forces a manual, priority reward notification layout broadcast across the configured server channel lanes and fires instant matching pre-filled player DMs.\n"
-                        "📋 `/listplayers` - Generates a secure roster snapshot display showing up to 20 registered members and their active profiles matching this guild partition matrix.\n"
-                        "🧹 `/clearhistory` - Opens an interactive verification interface to cleanly wipe all current player profiles registrations data streams out of this guild context records rows.\n"
-                        "🖼️ `/admin_embed_builder [type] [attachment]` - Modifies graphic visuals layouts dynamically using live drag-and-drop file configuration options.\n"
-                        "🩺 `/diagnose` - Triggers an infrastructure system stability check monitoring exact latency delays, environment variables states, and live cloud numbers.\n"
+                        "Management systems overrides restricted to designated server roles parameters:\\n\\n"
+                        "🛠️ `/setup [channel] [admin_role] [player_role]` - Maps target reward notification drop streams, sets your base alert role ping configurations, and authorizes access keys.\\n"
+                        "📢 `/redeem [code]` - Forces a manual, priority reward notification layout broadcast across the configured server channel lanes and fires instant matching pre-filled player DMs.\\n"
+                        "📋 `/listplayers` - Generates a secure roster snapshot display showing up to 20 registered members and their active profiles matching this guild partition matrix.\\n"
+                        "🧹 `/clearhistory` - Opens an interactive verification interface to cleanly wipe all current player profiles registrations data streams out of this guild context records rows.\\n"
+                        "🖼️ `/admin_embed_builder [type] [attachment]` - Modifies graphic visuals layouts dynamically using live drag-and-drop file configuration options.\\n"
+                        "🩺 `/diagnose` - Triggers an infrastructure system stability check monitoring exact latency delays, environment variables states, and live cloud numbers.\\n"
                         "🔄 `/sync` - Forces a complete command tree refresh sync operation updating structural slash mappings across Discord API servers instantly."
                     ),
                     color=discord.Color.from_rgb(14, 21, 46)
@@ -400,7 +399,7 @@ async def execute_global_automation_blast(code: str):
         ping_string = f"<@&{player_role_id}>" if player_role_id else "@everyone"
         public_embed = discord.Embed(
             title="🏁 OFFICIAL ASPHALT LEGENDS UNITE REDEEM CODE 🏁",
-            description=f"A new universal rewards voucher has been deployed across global tracking arrays!\n\n**PROMO CODE:**\n```📬 {code.upper()} ```\n\n[Launch Official Redeem Portal](https://www.gameloft.com/redeem/asphalt-legends)",
+            description=f"A new universal rewards voucher has been deployed across global tracking arrays!\\n\\n**PROMO CODE:**\\n```📬 {code.upper()} ```\\n\\n[Launch Official Redeem Portal](https://www.gameloft.com/redeem/asphalt-legends)",
             color=discord.Color.from_rgb(14, 21, 46)
         )
         
@@ -508,7 +507,7 @@ async def set_id_slash(interaction: discord.Interaction, player_id: str):
                 pass
                 
     dm_status_str = "ON" if current_dm_pref else "OFF"
-    await interaction.response.send_message(f"✅ Linked Asphalt ID: **{player_id}**\n🔔 Private DM Alerts Status: **{dm_status_str}**")
+    await interaction.response.send_message(f"✅ Linked Asphalt ID: **{player_id}**\\n🔔 Private DM Alerts Status: **{dm_status_str}**")
 
 @bot.tree.command(name="delete_id", description="🗑️ Public Tool: Unlink and scrub your profile data completely from cluster ledgers.")
 async def delete_id_slash(interaction: discord.Interaction):
@@ -590,7 +589,7 @@ async def redeem_slash(interaction: discord.Interaction, code: str):
         
         public_embed = discord.Embed(
             title="🏁 MANUAL REWARDS REDEEM CODE ALERT 🏁", 
-            description=f"An administrative reward drop has occurred!\n\n**PROMO CODE:**\n```📬 {code} ```\n\n[Launch Official Redeem Portal](https://www.gameloft.com/redeem/asphalt-legends)", 
+            description=f"An administrative reward drop has occurred!\\n\\n**PROMO CODE:**\\n```📬 {code} ```\\n\\n[Launch Official Redeem Portal](https://www.gameloft.com/redeem/asphalt-legends)", 
             color=discord.Color.from_rgb(14, 21, 46)
         )
         
@@ -678,6 +677,29 @@ async def admin_embed_builder_slash(interaction: discord.Interaction, element: a
     bot.guild_cache[guild_id][field] = saved_url
     
     await interaction.followup.send(f"🎯 Brand Visual Success: The custom {element.name} asset has been cached and loaded into automated drop templates.", ephemeral=True)
+
+@bot.tree.command(name="identity", description="👤 Owner Tool: Dynamically rebrand the bot name and avatar via a single interactive interface option.")
+@app_commands.describe(new_name="The updated display name for the bot application.", avatar_file="The graphic file asset to register as the bot's new profile picture.")
+@commands.is_owner()
+async def identity_slash(interaction: discord.Interaction, new_name: str, avatar_file: discord.Attachment):
+    if not avatar_file.content_type or not avatar_file.content_type.startswith("image/"):
+        return await interaction.response.send_message("⚠️ Attachment Error: Target file structure must evaluate cleanly to standard graphic format types.", ephemeral=True)
+    
+    await interaction.response.defer(ephemeral=True)
+    try:
+        # Fetch the attachment bytes from the Discord CDN
+        avatar_bytes = await avatar_file.read()
+        
+        # Modify the global application client state profile fields
+        await bot.user.edit(username=new_name, avatar=avatar_bytes)
+        
+        await interaction.followup.send(f"🤖 **Identity Rebrand Matrix Executed:** Main application signature updated cleanly to **{new_name}** across structural platforms.", ephemeral=True)
+    except discord.HTTPException as http_err:
+        print(f"❌ Application state editing payload error: {http_err}")
+        await interaction.followup.send(f"⚠️ **Discord API Pipeline Boundary Exceeded:** Identity updates are rate-limited globally by Discord (typically 2 changes per hour). Please review console records: `{http_err}`", ephemeral=True)
+    except Exception as general_err:
+        print(f"❌ Unexpected application fault inside identity controller: {general_err}")
+        await interaction.followup.send(f"⚠️ **Internal Processing Fault Encountered:** `{general_err}`", ephemeral=True)
 
 @bot.tree.command(name="diagnose", description="🩺 Admin Tool: Runs an interactive system diagnostic stability health check.")
 @is_admin_or_delegated()
