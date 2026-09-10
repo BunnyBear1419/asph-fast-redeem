@@ -598,7 +598,7 @@ async def diagnose_slash(interaction: discord.Interaction):
     app_commands.Choice(name="This Server Only (Instant Wipe & Update)", value="guild"),
     app_commands.Choice(name="Purge/Clear This Server's Cache", value="clear_guild")
 ])
-@is_admin_or_delegated()
+@commands.is_owner()
 async def sync_slash(interaction: discord.Interaction, scope: app_commands.Choice[str]):
     await interaction.response.defer(ephemeral=True)
     try:
