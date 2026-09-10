@@ -3,3 +3,4 @@ discord.py==2.4.0
 aiohttp==3.10.5
 beautifulsoup4==4.12.3
 pymongo==4.6.1
+lxml
