@@ -36,7 +36,7 @@ def run_web_server():
 
 threading.Thread(target=run_web_server, daemon=True).start()
 
-CODE_PATTERN = re.compile(r'\\b[A-Za-z0-9_-]{6,16}\\b')
+CODE_PATTERN = re.compile(r'\b[A-Za-z0-9_-]{6,16}\b')
 
 BLACKLISTED_WORDS = {
     "REDEEM", "TOKENS", "CREDITS", "ASPHALT", "UNITE", 
@@ -304,7 +304,17 @@ async def execute_global_automation_blast(code: str):
         if not guild:
             continue
             
-        target_channel = bot.get_channel(guild_cfg.get("notification_channel"))
+        channel_id = guild_cfg.get("notification_channel")
+        if not channel_id:
+            continue
+            
+        target_channel = bot.get_channel(int(channel_id))
+        if not target_channel:
+            try:
+                target_channel = await bot.fetch_channel(int(channel_id))
+            except Exception:
+                continue
+                
         if not target_channel:
             continue
             
@@ -515,24 +525,45 @@ async def redeem_slash(interaction: discord.Interaction, code: str):
     await interaction.response.defer(ephemeral=True)
     guild_id = str(interaction.guild_id)
     
-    cfg_res = bot.guild_cache.get(guild_id)
-    if not cfg_res:
-        loop = asyncio.get_event_loop()
-        cfg_res = await loop.run_in_executor(None, lambda: guild_config_col.find_one({"guild_id": guild_id}))
-        if cfg_res:
-            bot.guild_cache[guild_id] = cfg_res
+    try:
+        cfg_res = bot.guild_cache.get(guild_id)
+        if not cfg_res:
+            loop = asyncio.get_event_loop()
+            cfg_res = await loop.run_in_executor(None, lambda: guild_config_col.find_one({"guild_id": guild_id}))
+            if cfg_res:
+                bot.guild_cache[guild_id] = cfg_res
+                
+        if not cfg_res:
+            return await interaction.followup.send("⚠️ Configuration Missing: Execute the `/setup` configuration command block parameters first.", ephemeral=True)
             
-    if not cfg_res:
-        return await interaction.followup.send("⚠️ Configuration Missing: Execute the `/setup` configuration command block parameters first.", ephemeral=True)
+        channel_id = int(cfg_res["notification_channel"])
+        target_channel = bot.get_channel(channel_id)
+        if not target_channel:
+            try:
+                target_channel = await bot.fetch_channel(channel_id)
+            except Exception:
+                target_channel = None
+                
+        if not target_channel:
+            return await interaction.followup.send("⚠️ Setup Error: The target announcement channel could not be found or access is forbidden. Please re-run `/setup`.", ephemeral=True)
         
-    target_channel = bot.get_channel(cfg_res["notification_channel"])
-    if not target_channel:
-        return await interaction.followup.send("⚠️ Setup Error: The target announcement channel could not be found. Please re-run `/setup`.", ephemeral=True)
-    
-    public_embed = discord.Embed(title="🏁 MANUAL REWARDS REDEEM CODE ALERT 🏁", description=f"An administrative reward drop has occurred!\n\n**PROMO CODE:**\n```📬 {code.upper()} ```\n\n[Launch Official Redeem Portal](https://asphaltlegendsunite.com)", color=discord.Color.from_rgb(14, 21, 46))
-    public_embed.set_image(url=cfg_res.get("banner_url", DEFAULT_BANNER))
-    await target_channel.send(embed=public_embed)
-    await interaction.followup.send("✅ Public drop notifications dispatched successfully across connected servers loops nodes links channels.", ephemeral=True)
+        banner_url = cfg_res.get("banner_url") or DEFAULT_BANNER
+        public_embed = discord.Embed(
+            title="🏁 MANUAL REWARDS REDEEM CODE ALERT 🏁", 
+            description=f"An administrative reward drop has occurred!\n\n**PROMO CODE:**\n```📬 {code.upper()} ```\n\n[Launch Official Redeem Portal](https://asphaltlegendsunite.com)", 
+            color=discord.Color.from_rgb(14, 21, 46)
+        )
+        public_embed.set_image(url=banner_url)
+        
+        await target_channel.send(embed=public_embed)
+        await interaction.followup.send("✅ Public drop notifications dispatched successfully across connected channels.", ephemeral=True)
+
+    except Exception as cmd_error:
+        print(f"❌ Critical Error inside /redeem command routine: {cmd_error}")
+        try:
+            await interaction.followup.send(f"⚠️ Internal System Error: `{cmd_error}`. Check your Discloud server console logs for details.", ephemeral=True)
+        except Exception:
+            pass
 
 @bot.tree.command(name="listplayers", description="📋 Admin Tool: Displays active membership profiling registration lists.")
 @is_admin_or_delegated()
