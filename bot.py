@@ -91,6 +91,15 @@ async def on_ready():
     print(f"==========================================")
     
     try:
+        print("⚡ Synchronizing command trees to active servers...")
+        for guild in bot.guilds:
+            bot.tree.copy_global_to(guild=guild)
+            await bot.tree.sync(guild=guild)
+        print(f"🎯 Command matrices successfully bound locally across {len(bot.guilds)} servers.")
+    except Exception as e:
+        print(f"⚠️ Startup sync pipeline exception: {e}")
+
+    try:
         loop = asyncio.get_event_loop()
         configs = await loop.run_in_executor(None, lambda: list(guild_config_col.find({})))
         for cfg in configs:
@@ -315,7 +324,6 @@ async def broadcast_code_to_dms(code: str, target_guild_id_str: str = None):
                     continue
                     
             if member:
-                # FIXED: Parameter key transformed to player_id to fit Gameloft's input validation routing
                 prefilled_url = f"https://www.gameloft.com/redeem/asphalt-legends?player_id={p_info['player_id']}&code={code.upper()}"
                 dm_embed = discord.Embed(
                     title="🏁 Reward Pipeline Notification: Link Online", 
@@ -480,7 +488,6 @@ async def set_id_slash(interaction: discord.Interaction, player_id: str):
                 
     dm_status_str = "ON" if current_dm_pref else "OFF"
     await interaction.response.send_message(f"✅ Linked Asphalt ID: **{player_id}**\n🔔 Private DM Alerts Status: **{dm_status_str}**")
-    # REMOVED: Historic backlog drop execution routine loop deleted completely from code matrix layout.
 
 @bot.tree.command(name="delete_id", description="🗑️ Public Tool: Unlink and scrub your profile data completely from cluster ledgers.")
 async def delete_id_slash(interaction: discord.Interaction):
