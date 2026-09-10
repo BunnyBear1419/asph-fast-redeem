@@ -324,7 +324,7 @@ async def broadcast_code_to_dms(code: str, target_guild_id_str: str = None):
                     continue
                     
             if member:
-                prefilled_url = f"https://www.gameloft.com/redeem/asphalt-legends?player_id={p_info['player_id']}&code={code.upper()}"
+                prefilled_url = f"https://www.gameloft.com/redeem/asphalt-legends?playerId={p_info['player_id']}&code={code.upper()}"
                 dm_embed = discord.Embed(
                     title="🏁 Reward Pipeline Notification: Link Online", 
                     description=f"A fresh voucher code has matched your player registry matrix. Click the button mapping below to process immediate claiming actions.", 
