@@ -12,6 +12,7 @@ from discord import app_commands
 from discord.ext import tasks, commands
 import pymongo
 from pymongo import MongoClient, DESCENDING
+
 class KeepAliveHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -33,6 +34,7 @@ def run_web_server():
         print(f"⚠️ Web Infrastructure Note (Port 10000 busy): {e}. Proceeding smoothly.")
 
 threading.Thread(target=run_web_server, daemon=True).start()
+
 CODE_PATTERN = re.compile(r'\b[A-Za-z0-9_-]{6,16}\b')
 
 BLACKLISTED_WORDS = {
@@ -49,6 +51,7 @@ USER_AGENTS = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
 ]
+
 MONGO_URI = os.environ.get("MONGO_URI")
 MONGO_DB_NAME = os.environ.get("MONGO_DB_NAME", "myDiscordBot")
 
@@ -62,6 +65,7 @@ guild_config_col = db["guild_config"]
 player_profiles_col = db["player_profiles"]
 scraper_cache_col = db["scraper_cache"]
 backups_archive_col = db["daily_backups_archive"]
+
 class AsphaltBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
@@ -78,6 +82,7 @@ class AsphaltBot(commands.Bot):
         print("🟢 Background Scraping Engine successfully initialized.")
 
 bot = AsphaltBot()
+
 @bot.event
 async def on_ready():
     print(f"==========================================")
@@ -97,6 +102,7 @@ async def on_ready():
         print(f"📦 Preloaded configuration cache for {len(configs)} servers.")
     except Exception as e:
         print(f"⚠️ Failed to populate local configurations cache: {e}")
+
 class HelpDropdown(discord.ui.Select):
     def __init__(self, show_admin_docs: bool):
         options = [
@@ -170,6 +176,7 @@ class HelpView(discord.ui.View):
     def __init__(self, show_admin_docs: bool):
         super().__init__(timeout=180)
         self.add_item(HelpDropdown(show_admin_docs))
+
 @tasks.loop(minutes=5)
 async def auto_code_scraper_loop():
     await bot.wait_until_ready()
@@ -207,6 +214,7 @@ async def auto_code_scraper_loop():
                         await process_text_and_blast(html_text.upper())
         except Exception as e:
             print(f"⚠️ Background Scraper Log: Gameloft parsing platform layout check update skip: {e}")
+
 async def process_text_and_blast(search_blob: str):
     keywords = [
         "REDEEM CODE", "NEW CODE", "PROMO CODE", "FREE TOKENS", 
@@ -228,6 +236,7 @@ async def process_text_and_blast(search_blob: str):
                     await execute_global_automation_blast(code)
                 except Exception as db_err:
                     print(f"⚠️ Database Error archiving newly scraped code element context: {db_err}")
+
 async def execute_global_automation_blast(code: str):
     loop = asyncio.get_event_loop()
     configs_res = await loop.run_in_executor(None, lambda: list(guild_config_col.find({})))
@@ -298,6 +307,7 @@ async def execute_global_automation_blast(code: str):
                     print(f"🚫 Direct message delivery block encountered for player user UID {p_info['user_id']}. Privacy restrictions active.")
                 except Exception as dm_err:
                     print(f"⚠️ DM transmission channel failure on user interface lines mapping loop: {dm_err}")
+
 def is_admin_or_delegated():
     async def predicate(interaction: discord.Interaction) -> bool:
         if not interaction.guild:
@@ -327,6 +337,7 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
     if isinstance(error, app_commands.errors.MissingPermissions):
         if not interaction.response.is_done():
             await interaction.response.send_message("🚫 **Access Denied:** administrative clearances validation parameters verification error.", ephemeral=True)
+
 @bot.tree.command(name="help", description="📖 Comprehensive interactive navigation documentation matrix console manual.")
 async def help_slash(interaction: discord.Interaction):
     guild_id = str(interaction.guild_id)
@@ -376,6 +387,7 @@ async def set_id_slash(interaction: discord.Interaction, player_id: str):
                 
     dm_status_str = "ON" if current_dm_pref else "OFF"
     await interaction.response.send_message(f"✅ Linked Asphalt ID: **{player_id}**\n🔔 Private DM Alerts Status: **{dm_status_str}**")
+
 @bot.tree.command(name="delete_id", description="🗑️ Public Tool: Unlink and scrub your profile data completely from cluster ledgers.")
 async def delete_id_slash(interaction: discord.Interaction):
     guild_id = str(interaction.guild_id)
@@ -413,6 +425,7 @@ async def history_slash(interaction: discord.Interaction):
         manual_url = f"https://asphaltlegendsunite.com{code}"
         embed.add_field(name=f"{idx}. Code Entry Parameters: `{code}`", value=f"🔗 [Launch Claim Portal Shortcut]({manual_url})", inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
+
 @bot.tree.command(name="setup", description="🛠️ Admin Tool: Configure notification target channels, manager clearings, and player pings.")
 @is_admin_or_delegated()
 async def setup_slash(interaction: discord.Interaction, announcement_channel: discord.TextChannel, admin_role: discord.Role, player_role: discord.Role):
@@ -566,4 +579,16 @@ async def diagnose_slash(interaction: discord.Interaction):
 @bot.tree.command(name="sync", description="🔄 Admin Tool: Forces an immediate refresh tree sync mapping system parameters across Discord.")
 @is_admin_or_delegated()
 async def sync_slash(interaction: discord.Interaction):
-await interaction.response.defer(ephemeral=True)try:await bot.tree.sync()await interaction.followup.send("🎯 Application Slash Directory Sync Complete: Commands synchronized successfully globally.")except Exception as e:await interaction.followup.send(f"❌ Sync Exception Encountered: {e}", ephemeral=True)if name == "main":token = os.environ.get("DISCORD_BOT_TOKEN")if not token:print("❌ CRITICAL BOOT BLOCK: The 'DISCORD_BOT_TOKEN' environment key array registry is empty. Execution killed.")else:bot.run(token)
+    await interaction.response.defer(ephemeral=True)
+    try:
+        await bot.tree.sync()
+        await interaction.followup.send("🎯 Application Slash Directory Sync Complete: Commands synchronized successfully globally.")
+    except Exception as e:
+        await interaction.followup.send(f"❌ Sync Exception Encountered: {e}", ephemeral=True)
+
+if __name__ == "__main__":
+    token = os.environ.get("DISCORD_BOT_TOKEN")
+    if not token:
+        print("❌ CRITICAL BOOT BLOCK: The 'DISCORD_BOT_TOKEN' environment key array registry is empty. Execution killed.")
+    else:
+        bot.run(token)
