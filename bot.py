@@ -502,20 +502,21 @@ async def setup_slash(interaction: discord.Interaction, announcement_channel: di
     guild_id = str(interaction.guild_id)
     loop = asyncio.get_event_loop()
     
-    existing_cfg = bot.guild_cache.get(guild_id)
-    if not existing_cfg:
-        existing_cfg = await loop.run_in_executor(None, lambda: guild_config_col.find_one({"guild_id": guild_id})) or {}
-    
+    # Force a direct overwrite object instead of relying on a broken structure merge
     updated_config = {
         "guild_id": guild_id,
         "notification_channel": announcement_channel.id, 
         "bot_admin_role_id": admin_role.id, 
         "alert_role_id": player_role.id,
-        "banner_url": existing_cfg.get("banner_url", DEFAULT_BANNER),
-        "thumbnail_url": existing_cfg.get("thumbnail_url", DEFAULT_THUMBNAIL)
+        "banner_url": DEFAULT_BANNER,
+        "thumbnail_url": DEFAULT_THUMBNAIL
     }
     
-    await loop.run_in_executor(None, lambda: guild_config_col.update_one({"guild_id": guild_id}, {"$set": updated_config}, upsert=True))
+    await loop.run_in_executor(None, lambda: guild_config_col.update_one(
+        {"guild_id": guild_id}, 
+        {"$set": updated_config}, 
+        upsert=True
+    ))
     bot.guild_cache[guild_id] = updated_config
     await interaction.followup.send("⚙️ Setup matrix configuration nodes saved directly to cloud tables rows checked successfully!", ephemeral=True)
 
@@ -533,17 +534,19 @@ async def redeem_slash(interaction: discord.Interaction, code: str):
             if cfg_res:
                 bot.guild_cache[guild_id] = cfg_res
                 
-        if not cfg_res:
-            return await interaction.followup.send("⚠️ Configuration Missing: Execute the `/setup` configuration command block parameters first.", ephemeral=True)
+        # SAFE CHECK: Use .get() to prevent 'KeyError' crashes if the database record is missing parts
+        if not cfg_res or not cfg_res.get("notification_channel"):
+            return await interaction.followup.send("⚠️ Configuration Missing or Broken: Please re-run the `/setup` command to rebuild your database rows.", ephemeral=True)
             
         channel_id = int(cfg_res["notification_channel"])
         target_channel = bot.get_channel(channel_id)
+        
         if not target_channel:
             try:
                 target_channel = await bot.fetch_channel(channel_id)
             except Exception:
                 target_channel = None
-                
+
         if not target_channel:
             return await interaction.followup.send("⚠️ Setup Error: The target announcement channel could not be found or access is forbidden. Please re-run `/setup`.", ephemeral=True)
         
