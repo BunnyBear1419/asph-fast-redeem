@@ -36,7 +36,7 @@ def run_web_server():
 
 threading.Thread(target=run_web_server, daemon=True).start()
 
-CODE_PATTERN = re.compile(r'\b[A-Za-z0-9_-]{6,16}\b')
+CODE_PATTERN = re.compile(r'\\b[A-Za-z0-9_-]{6,16}\\b')
 
 BLACKLISTED_WORDS = {
     "REDEEM", "TOKENS", "CREDITS", "ASPHALT", "UNITE", 
@@ -106,7 +106,6 @@ async def on_message(message: discord.Message):
     if message.author.bot:
         return
 
-    # Secret cache breaker bypass condition
     if message.content == "!forcesyncguild":
         if not message.author.guild_permissions.administrator:
             try:
@@ -146,11 +145,15 @@ class HelpDropdown(discord.ui.Select):
         await interaction.response.defer(ephemeral=True)
         guild_id = str(interaction.guild_id)
         
-        cfg_res = bot.guild_cache.get(guild_id, {})
+        cfg_res = bot.guild_cache.get(guild_id)
+        if not cfg_res:
+            loop = asyncio.get_event_loop()
+            cfg_res = await loop.run_in_executor(None, lambda: guild_config_col.find_one({"guild_id": guild_id})) or {}
+            
         banner = cfg_res.get("banner_url", DEFAULT_BANNER)
         thumb = cfg_res.get("thumbnail_url", DEFAULT_THUMBNAIL)
         
-        selected_value = self.values[0] if self.values else ""
+        selected_value = self.values if self.values else ""
         if selected_value == "information":
             embed = discord.Embed(
                 title="ℹ️ System Architecture & Operations Overview",
@@ -244,10 +247,7 @@ async def auto_code_scraper_loop():
                     if response.status == 200:
                         xml_data = await response.text()
                         
-                        # Use BeautifulSoup to cleanly sanitize and structuralize broken XML strings
                         soup = BeautifulSoup(xml_data, features="xml")
-                        
-                        # Find all entry components across standard RSS structures
                         for entry in soup.find_all('entry'):
                             title = entry.find('title')
                             content = entry.find('content')
@@ -394,6 +394,12 @@ async def help_slash(interaction: discord.Interaction):
         is_authorized = True
     else:
         cfg_check = bot.guild_cache.get(guild_id)
+        if not cfg_check:
+            loop = asyncio.get_event_loop()
+            cfg_check = await loop.run_in_executor(None, lambda: guild_config_col.find_one({"guild_id": guild_id}))
+            if cfg_check:
+                bot.guild_cache[guild_id] = cfg_check
+                
         if cfg_check and cfg_check.get("bot_admin_role_id") and discord.utils.get(interaction.user.roles, id=int(cfg_check["bot_admin_role_id"])):
             is_authorized = True
 
@@ -424,6 +430,11 @@ async def set_id_slash(interaction: discord.Interaction, player_id: str):
     ))
     
     cfg_check = bot.guild_cache.get(guild_id)
+    if not cfg_check:
+        cfg_check = await loop.run_in_executor(None, lambda: guild_config_col.find_one({"guild_id": guild_id}))
+        if cfg_check:
+            bot.guild_cache[guild_id] = cfg_check
+            
     if cfg_check and cfg_check.get("alert_role_id"):
         role = interaction.guild.get_role(int(cfg_check["alert_role_id"]))
         if role:
@@ -461,66 +472,82 @@ async def toggle_dm_slash(interaction: discord.Interaction):
 
 @bot.tree.command(name="history", description="📜 Public Tool: Lists the last 10 discovered reward vouchers logs.")
 async def history_slash(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
     loop = asyncio.get_event_loop()
     cache_res = await loop.run_in_executor(None, lambda: list(scraper_cache_col.find({}).sort("detected_at", DESCENDING).limit(10)))
     if not cache_res:
-        return await interaction.response.send_message("🗂️ Verification Note: History indexes matching tracking parameters are empty.", ephemeral=True)
+        return await interaction.followup.send("🗂️ Verification Note: History indexes matching tracking parameters are empty.", ephemeral=True)
         
     embed = discord.Embed(title="🏁 Expanded Redemption Drop History (Last 10 Records)", color=discord.Color.from_rgb(14, 21, 46))
     for idx, row in enumerate(cache_res, 1):
         code = row["code"]
         manual_url = f"https://asphaltlegendsunite.com?code={code}"
         embed.add_field(name=f"{idx}. Code Entry Parameters: `{code}`", value=f"🔗 [Launch Claim Portal Shortcut]({manual_url})", inline=False)
-    await interaction.response.send_message(embed=embed, ephemeral=True)
+    await interaction.followup.send(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="setup", description="🛠️ Admin Tool: Configure notification target channels, manager clearings, and player pings.")
 @is_admin_or_delegated()
 async def setup_slash(interaction: discord.Interaction, announcement_channel: discord.TextChannel, admin_role: discord.Role, player_role: discord.Role):
+    await interaction.response.defer(ephemeral=True)
     guild_id = str(interaction.guild_id)
     loop = asyncio.get_event_loop()
+    
+    existing_cfg = bot.guild_cache.get(guild_id)
+    if not existing_cfg:
+        existing_cfg = await loop.run_in_executor(None, lambda: guild_config_col.find_one({"guild_id": guild_id})) or {}
     
     updated_config = {
         "guild_id": guild_id,
         "notification_channel": announcement_channel.id, 
         "bot_admin_role_id": admin_role.id, 
         "alert_role_id": player_role.id,
-        "banner_url": bot.guild_cache.get(guild_id, {}).get("banner_url", DEFAULT_BANNER),
-        "thumbnail_url": bot.guild_cache.get(guild_id, {}).get("thumbnail_url", DEFAULT_THUMBNAIL)
+        "banner_url": existing_cfg.get("banner_url", DEFAULT_BANNER),
+        "thumbnail_url": existing_cfg.get("thumbnail_url", DEFAULT_THUMBNAIL)
     }
     
     await loop.run_in_executor(None, lambda: guild_config_col.update_one({"guild_id": guild_id}, {"$set": updated_config}, upsert=True))
     bot.guild_cache[guild_id] = updated_config
-    await interaction.response.send_message("⚙️ Setup matrix configuration nodes saved directly to cloud tables rows checked successfully!")
+    await interaction.followup.send("⚙️ Setup matrix configuration nodes saved directly to cloud tables rows checked successfully!", ephemeral=True)
 
 @bot.tree.command(name="redeem", description="📢 Admin Tool: Dispatches an administrative custom priority voucher alert.")
 @is_admin_or_delegated()
 async def redeem_slash(interaction: discord.Interaction, code: str):
+    await interaction.response.defer(ephemeral=True)
     guild_id = str(interaction.guild_id)
+    
     cfg_res = bot.guild_cache.get(guild_id)
     if not cfg_res:
-        return await interaction.response.send_message("⚠️ Configuration Missing: Execute the `/setup` configuration command block parameters first.", ephemeral=True)
+        loop = asyncio.get_event_loop()
+        cfg_res = await loop.run_in_executor(None, lambda: guild_config_col.find_one({"guild_id": guild_id}))
+        if cfg_res:
+            bot.guild_cache[guild_id] = cfg_res
+            
+    if not cfg_res:
+        return await interaction.followup.send("⚠️ Configuration Missing: Execute the `/setup` configuration command block parameters first.", ephemeral=True)
         
     target_channel = bot.get_channel(cfg_res["notification_channel"])
-    await interaction.response.defer(ephemeral=True)
+    if not target_channel:
+        return await interaction.followup.send("⚠️ Setup Error: The target announcement channel could not be found. Please re-run `/setup`.", ephemeral=True)
     
     public_embed = discord.Embed(title="🏁 MANUAL REWARDS REDEEM CODE ALERT 🏁", description=f"An administrative reward drop has occurred!\n\n**PROMO CODE:**\n```📬 {code.upper()} ```\n\n[Launch Official Redeem Portal](https://asphaltlegendsunite.com)", color=discord.Color.from_rgb(14, 21, 46))
     public_embed.set_image(url=cfg_res.get("banner_url", DEFAULT_BANNER))
     await target_channel.send(embed=public_embed)
-    await interaction.followup.send("✅ Public drop notifications dispatched successfully across connected servers loops nodes links channels.")
+    await interaction.followup.send("✅ Public drop notifications dispatched successfully across connected servers loops nodes links channels.", ephemeral=True)
 
 @bot.tree.command(name="listplayers", description="📋 Admin Tool: Displays active membership profiling registration lists.")
 @is_admin_or_delegated()
 async def listplayers_slash(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
     guild_id = str(interaction.guild_id)
     loop = asyncio.get_event_loop()
     server_res = await loop.run_in_executor(None, lambda: list(player_profiles_col.find({"guild_id": guild_id}).limit(20)))
     if not server_res:
-        return await interaction.response.send_message("🧹 Enrollment checklists index metrics are currently blank.", ephemeral=True)
+        return await interaction.followup.send("🧹 Enrollment checklists index metrics are currently blank.", ephemeral=True)
         
     embed = discord.Embed(title="📋 Registered Manifest Checklist", color=discord.Color.from_rgb(14, 21, 46))
     for info in server_res:
         embed.add_field(name=f"User Display Profile: {info['username']}", value=f"🆔 Game Account ID: `{info['player_id']}`", inline=False)
-    await interaction.response.send_message(embed=embed)
+    await interaction.followup.send(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="clearhistory", description="🧹 Admin Tool: Purges the player configuration registry table dataset for this guild.")
 @is_admin_or_delegated()
@@ -574,7 +601,7 @@ async def admin_embed_builder_slash(interaction: discord.Interaction, element: a
         bot.guild_cache[guild_id] = {}
     bot.guild_cache[guild_id][field] = saved_url
     
-    await interaction.followup.send(f"🎯 Brand Visual Success: The custom {element.name} asset has been cached and loaded into automated drop templates.")
+    await interaction.followup.send(f"🎯 Brand Visual Success: The custom {element.name} asset has been cached and loaded into automated drop templates.", ephemeral=True)
 
 @bot.tree.command(name="diagnose", description="🩺 Admin Tool: Runs an interactive system diagnostic stability health check.")
 @is_admin_or_delegated()
@@ -614,17 +641,17 @@ async def sync_slash(interaction: discord.Interaction, scope: app_commands.Choic
     try:
         if scope.value == "global":
             synced = await bot.tree.sync()
-            await interaction.followup.send(f"🎯 **Global Sync Dispatched:** Synced `{len(synced)}` commands across standard endpoints. (Discord may take up to an hour to populate).")
+            await interaction.followup.send(f"🎯 **Global Sync Dispatched:** Synced `{len(synced)}` commands across standard endpoints. (Discord may take up to an hour to populate).", ephemeral=True)
             
         elif scope.value == "guild":
             bot.tree.copy_global_to(guild=interaction.guild)
             synced = await bot.tree.sync(guild=interaction.guild)
-            await interaction.followup.send(f"⚡ **Instant Server Sync Complete:** Pushed `{len(synced)}` commands directly to this server layout.")
+            await interaction.followup.send(f"⚡ **Instant Server Sync Complete:** Pushed `{len(synced)}` commands directly to this server layout.", ephemeral=True)
             
         elif scope.value == "clear_guild":
             bot.tree.clear_commands(guild=interaction.guild)
             await bot.tree.sync(guild=interaction.guild)
-            await interaction.followup.send("🧹 **Server Purge Successful:** Completely scrubbed local guild overlays. Try reloading Discord now.")
+            await interaction.followup.send("🧹 **Server Purge Successful:** Completely scrubbed local guild overlays. Try reloading Discord now.", ephemeral=True)
             
     except Exception as e:
         await interaction.followup.send(f"❌ **Sync Exception Encountered:** {e}", ephemeral=True)
