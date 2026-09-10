@@ -44,8 +44,9 @@ BLACKLISTED_WORDS = {
     "WORKING", "PROMO", "REWARD", "CODES", "DISCORD", "SERVER"
 }
 
-DEFAULT_BANNER = "https://imgur.com"
-DEFAULT_THUMBNAIL = "https://imgur.com"
+# Safe fallbacks. If an admin inputs an invalid URL, the URL validator will strip it before sending to Discord.
+DEFAULT_BANNER = None
+DEFAULT_THUMBNAIL = None
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -139,6 +140,15 @@ async def on_command_error(ctx, error):
         return
     raise error
 
+def is_valid_image_url(url: str) -> bool:
+    """Ensures URLs actually point directly to an image asset context to prevent Discord payload API silent rejections."""
+    if not url or not isinstance(url, str):
+        return False
+    # Verifies link formatting incorporates standard asset extensions or direct discord/imgur media paths
+    if url.startswith("https://imgur.com") and not (url.endswith(".png") or url.endswith(".jpg") or url.endswith(".jpeg") or url.endswith(".gif")):
+        return False
+    return url.startswith(("http://", "https://"))
+
 class HelpDropdown(discord.ui.Select):
     def __init__(self, show_admin_docs: bool):
         options = [
@@ -151,64 +161,72 @@ class HelpDropdown(discord.ui.Select):
         super().__init__(placeholder="Select system segment...", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-        guild_id = str(interaction.guild_id)
-        
-        cfg_res = bot.guild_cache.get(guild_id)
-        if not cfg_res:
-            loop = asyncio.get_event_loop()
-            cfg_res = await loop.run_in_executor(None, lambda: guild_config_col.find_one({"guild_id": guild_id})) or {}
+        try:
+            await interaction.response.defer(ephemeral=True)
+            guild_id = str(interaction.guild_id)
             
-        banner = cfg_res.get("banner_url", DEFAULT_BANNER)
-        thumb = cfg_res.get("thumbnail_url", DEFAULT_THUMBNAIL)
-        
-        selected_value = self.values if self.values else ""
-        if selected_value == "information":
-            embed = discord.Embed(
-                title="ℹ️ System Architecture & Operations Overview",
-                description=(
-                    "This integration provides an advanced, automated notification network designed to solve "
-                    "reward voucher lookup bottlenecks across the community infrastructure.\n\n"
-                    "**Core Engine Blueprint:**\n"
-                    "🔹 **Background Automated Scraper:** Wakeful task loops run quietly **every 5 minutes** executing non-blocking scrape routines across multi-site target vectors.\n"
-                    "🔹 **Target Constraints Narrowing:** Filters analyze content blocks exclusively targeting **Asphalt Legends Unite** rewards metrics layout patterns.\n"
-                    "🔹 **Smart Deduplication Pipeline:** Discovered strings match against database indexes to completely discard duplicate elements before alert delivery.\n"
-                    "🔹 **Instant Direct Delivery Mapping:** Links prefill user credentials, sending registered players straight to Gameloft active portals with zero manual typing requirements."
-                ),
-                color=discord.Color.from_rgb(14, 21, 46)
-            )
-            embed.set_image(url=banner)
-        elif selected_value == "player":
-            embed = discord.Embed(
-                title="🕹️ Player Utilities & Manifest Commands Index",
-                description=(
-                    "Universal commands available to all community members:\n\n"
-                    "📝 `/help` - Launches this comprehensive interactive dropdown options navigation system map.\n"
-                    "🔑 `/set_id [player_id]` - Links your custom Asphalt Player ID structure to your account data. **Requires format `u-` to register properly.** Enrolls you in premium priority DM notifications layers.\n"
-                    "🔔 `/toggle_dm` - Dynamically toggles your private direct message rewards delivery pipeline channel **ON** or **OFF** instantly.\n"
-                    "🗑️ `/delete_id` - Completely scrubs your personal registration metadata profile card from the global storage vaults."
-                ),
-                color=discord.Color.from_rgb(14, 21, 46)
-            )
-            embed.set_thumbnail(url=thumb)
-        elif selected_value == "admin":
-            embed = discord.Embed(
-                title="⚙️ Master Administration Workspace & Controls Console",
-                description=(
-                    "Management systems overrides restricted to designated server roles parameters:\n\n"
-                    "🛠️ `/setup [channel] [admin_role] [player_role]` - Maps target reward notification drop streams, sets your base alert role ping configurations, and authorizes access keys.\n"
-                    "📢 `/redeem [code]` - Forces a manual, priority reward notification layout broadcast across the configured server channel lanes and fires instant matching pre-filled player DMs.\n"
-                    "📋 `/listplayers` - Generates a secure roster snapshot display showing up to 20 registered members and their active profiles matching this guild partition matrix.\n"
-                    "🧹 `/clearhistory` - Opens an interactive verification interface to cleanly wipe all current player profiles registrations data streams out of this guild context records rows.\n"
-                    "🖼️ `/admin_embed_builder [type] [attachment]` - Modifies graphic visuals layouts dynamically using live drag-and-drop file configuration options.\n"
-                    "🩺 `/diagnose` - Triggers an infrastructure system stability check monitoring exact latency delays, environment variables states, and live cloud numbers.\n"
-                    "🔄 `/sync` - Forces a complete command tree refresh sync operation updating structural slash mappings across Discord API servers instantly."
-                ),
-                color=discord.Color.from_rgb(14, 21, 46)
-            )
-            embed.set_thumbnail(url=thumb)
+            cfg_res = bot.guild_cache.get(guild_id)
+            if not cfg_res:
+                loop = asyncio.get_event_loop()
+                cfg_res = await loop.run_in_executor(None, lambda: guild_config_col.find_one({"guild_id": guild_id})) or {}
+                
+            banner = cfg_res.get("banner_url", DEFAULT_BANNER)
+            thumb = cfg_res.get("thumbnail_url", DEFAULT_THUMBNAIL)
+            
+            selected_value = self.values[0] if self.values else ""
+            if selected_value == "information":
+                embed = discord.Embed(
+                    title="ℹ️ System Architecture & Operations Overview",
+                    description=(
+                        "This integration provides an advanced, automated notification network designed to solve "
+                        "reward voucher lookup bottlenecks across the community infrastructure.\n\n"
+                        "**Core Engine Blueprint:**\n"
+                        "🔹 **Background Automated Scraper:** Wakeful task loops run quietly **every 5 minutes** executing non-blocking scrape routines across multi-site target vectors.\n"
+                        "🔹 **Target Constraints Narrowing:** Filters analyze content blocks exclusively targeting **Asphalt Legends Unite** rewards metrics layout patterns.\n"
+                        "🔹 **Smart Deduplication Pipeline:** Discovered strings match against database indexes to completely discard duplicate elements before alert delivery.\n"
+                        "🔹 **Instant Direct Delivery Mapping:** Links prefill user credentials, sending registered players straight to Gameloft active portals with zero manual typing requirements."
+                    ),
+                    color=discord.Color.from_rgb(14, 21, 46)
+                )
+                if is_valid_image_url(banner):
+                    embed.set_image(url=banner)
+            elif selected_value == "player":
+                embed = discord.Embed(
+                    title="🕹️ Player Utilities & Manifest Commands Index",
+                    description=(
+                        "Universal commands available to all community members:\n\n"
+                        "📝 `/help` - Launches this comprehensive interactive dropdown options navigation system map.\n"
+                        "🔑 `/set_id [player_id]` - Links your custom Asphalt Player ID structure to your account data. **Requires format `u-` to register properly.** Enrolls you in premium priority DM notifications layers.\n"
+                        "🔔 `/toggle_dm` - Dynamically toggles your private direct message rewards delivery pipeline channel **ON** or **OFF** instantly.\n"
+                        "🗑️ `/delete_id` - Completely scrubs your personal registration metadata profile card from the global storage vaults."
+                    ),
+                    color=discord.Color.from_rgb(14, 21, 46)
+                )
+                if is_valid_image_url(thumb):
+                    embed.set_thumbnail(url=thumb)
+            elif selected_value == "admin":
+                embed = discord.Embed(
+                    title="⚙️ Master Administration Workspace & Controls Console",
+                    description=(
+                        "Management systems overrides restricted to designated server roles parameters:\n\n"
+                        "🛠️ `/setup [channel] [admin_role] [player_role]` - Maps target reward notification drop streams, sets your base alert role ping configurations, and authorizes access keys.\n"
+                        "📢 `/redeem [code]` - Forces a manual, priority reward notification layout broadcast across the configured server channel lanes and fires instant matching pre-filled player DMs.\n"
+                        "📋 `/listplayers` - Generates a secure roster snapshot display showing up to 20 registered members and their active profiles matching this guild partition matrix.\n"
+                        "🧹 `/clearhistory` - Opens an interactive verification interface to cleanly wipe all current player profiles registrations data streams out of this guild context records rows.\n"
+                        "🖼️ `/admin_embed_builder [type] [attachment]` - Modifies graphic visuals layouts dynamically using live drag-and-drop file configuration options.\n"
+                        "🩺 `/diagnose` - Triggers an infrastructure system stability check monitoring exact latency delays, environment variables states, and live cloud numbers.\n"
+                        "🔄 `/sync` - Forces a complete command tree refresh sync operation updating structural slash mappings across Discord API servers instantly."
+                    ),
+                    color=discord.Color.from_rgb(14, 21, 46)
+                )
+                if is_valid_image_url(thumb):
+                    embed.set_thumbnail(url=thumb)
+            else:
+                return
 
-        await interaction.followup.edit_message(message_id=interaction.message.id, embed=embed, view=self.view)
+            await interaction.followup.edit_message(message_id=interaction.message.id, embed=embed, view=self.view)
+        except Exception as e:
+            print(f"❌ Exception captured inside HelpDropdown callback operations framework: {e}")
 
 class HelpView(discord.ui.View):
     def __init__(self, show_admin_docs: bool):
@@ -385,7 +403,10 @@ async def execute_global_automation_blast(code: str):
             description=f"A new universal rewards voucher has been deployed across global tracking arrays!\n\n**PROMO CODE:**\n```📬 {code.upper()} ```\n\n[Launch Official Redeem Portal](https://www.gameloft.com/redeem/asphalt-legends)",
             color=discord.Color.from_rgb(14, 21, 46)
         )
-        public_embed.set_image(url=guild_cfg.get("banner_url", DEFAULT_BANNER))
+        
+        banner_url = guild_cfg.get("banner_url")
+        if is_valid_image_url(banner_url):
+            public_embed.set_image(url=banner_url)
         
         try:
             sent_msg = await target_channel.send(content=ping_string, embed=public_embed)
@@ -463,8 +484,8 @@ async def set_id_slash(interaction: discord.Interaction, player_id: str):
     user_id = str(interaction.user.id)
     
     loop = asyncio.get_event_loop()
-    prof_check = await loop.run_in_executor(None, lambda: player_profiles_col.find_one({"guild_id": guild_id, "user_id": user_id}))
-    current_dm_pref = prof_check.get("dm_enabled", True) if prof_check else True
+    prof_check = await loop.run_in_executor(None, lambda: player_profiles_col.find_one({"guild_id": guild_id, "user_id": user_id})) or {}
+    current_dm_pref = prof_check.get("dm_enabled", True)
     
     await loop.run_in_executor(None, lambda: player_profiles_col.update_one(
         {"guild_id": guild_id, "user_id": user_id},
@@ -525,8 +546,8 @@ async def setup_slash(interaction: discord.Interaction, announcement_channel: di
         "notification_channel": announcement_channel.id, 
         "bot_admin_role_id": admin_role.id, 
         "alert_role_id": player_role.id,
-        "banner_url": DEFAULT_BANNER,
-        "thumbnail_url": DEFAULT_THUMBNAIL
+        "banner_url": None,
+        "thumbnail_url": None
     }
     
     await loop.run_in_executor(None, lambda: guild_config_col.update_one(
@@ -567,13 +588,15 @@ async def redeem_slash(interaction: discord.Interaction, code: str):
         if not target_channel:
             return await interaction.followup.send("⚠️ Setup Error: The target announcement channel could not be found or access is forbidden. Please re-run `/setup`.", ephemeral=True)
         
-        banner_url = cfg_res.get("banner_url") or DEFAULT_BANNER
         public_embed = discord.Embed(
             title="🏁 MANUAL REWARDS REDEEM CODE ALERT 🏁", 
             description=f"An administrative reward drop has occurred!\n\n**PROMO CODE:**\n```📬 {code} ```\n\n[Launch Official Redeem Portal](https://www.gameloft.com/redeem/asphalt-legends)", 
             color=discord.Color.from_rgb(14, 21, 46)
         )
-        public_embed.set_image(url=banner_url)
+        
+        banner_url = cfg_res.get("banner_url")
+        if is_valid_image_url(banner_url):
+            public_embed.set_image(url=banner_url)
         
         await target_channel.send(embed=public_embed)
         await interaction.followup.send("✅ Public drop notifications dispatched successfully across connected channels.", ephemeral=True)
