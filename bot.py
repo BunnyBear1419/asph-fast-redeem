@@ -3,7 +3,6 @@ import re
 import random
 import asyncio
 import threading
-import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import aiohttp
@@ -13,6 +12,7 @@ from discord import app_commands
 from discord.ext import tasks, commands
 import pymongo
 from pymongo import MongoClient, DESCENDING
+from bs4 import BeautifulSoup
 
 class KeepAliveHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -244,15 +244,16 @@ async def auto_code_scraper_loop():
                     if response.status == 200:
                         xml_data = await response.text()
                         
-                        root = ET.fromstring(xml_data)
-                        ns = {'atom': 'http://www.w3.org/2005/Atom'}
+                        # Use BeautifulSoup to cleanly sanitize and structuralize broken XML strings
+                        soup = BeautifulSoup(xml_data, features="xml")
                         
-                        for entry in root.findall('atom:entry', ns):
-                            title = entry.find('atom:title', ns)
-                            content = entry.find('atom:content', ns)
+                        # Find all entry components across standard RSS structures
+                        for entry in soup.find_all('entry'):
+                            title = entry.find('title')
+                            content = entry.find('content')
                             
-                            title_text = title.text if title is not None else ""
-                            content_text = content.text if content is not None else ""
+                            title_text = title.get_text() if title else ""
+                            content_text = content.get_text() if content else ""
                             
                             search_blob = f"{title_text} {content_text}".upper()
                             await process_text_and_blast(search_blob)
