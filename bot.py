@@ -3,13 +3,15 @@ import re
 import random
 import asyncio
 import threading
-import aiohttp
 from datetime import datetime, timezone
+
 from http.server import BaseHTTPRequestHandler, HTTPServer
+import aiohttp
 
 import discord
 from discord import app_commands
 from discord.ext import tasks, commands
+
 import pymongo
 from pymongo import MongoClient, DESCENDING
 
@@ -72,8 +74,6 @@ class AsphaltBot(commands.Bot):
         intents.message_content = True  
         intents.members = True          
         super().__init__(command_prefix="!", intents=intents)
-        
-        # Local caching layer to prevent excessive database hits
         self.guild_cache = {}
 
     async def setup_hook(self):
@@ -91,7 +91,6 @@ async def on_ready():
     print(f"🛡️ Infrastructure systems running optimally.")
     print(f"==========================================")
     
-    # Pre-populate local system cache with existing server configurations
     try:
         loop = asyncio.get_event_loop()
         configs = await loop.run_in_executor(None, lambda: list(guild_config_col.find({})))
@@ -101,7 +100,7 @@ async def on_ready():
                 bot.guild_cache[str(g_id)] = cfg
         print(f"📦 Preloaded configuration cache for {len(configs)} servers.")
     except Exception as e:
-        print(f"⚠️ Failed to populate local configurations cache: {e}")
+        print(f"⚠️ Non-blocking warning during startup cache preload: {e}")
 
 class HelpDropdown(discord.ui.Select):
     def __init__(self, show_admin_docs: bool):
@@ -118,7 +117,6 @@ class HelpDropdown(discord.ui.Select):
         await interaction.response.defer(ephemeral=True)
         guild_id = str(interaction.guild_id)
         
-        # Pull instant configuration details from memory storage cache
         cfg_res = bot.guild_cache.get(guild_id, {})
         banner = cfg_res.get("banner_url", DEFAULT_BANNER)
         thumb = cfg_res.get("thumbnail_url", DEFAULT_THUMBNAIL)
@@ -177,11 +175,31 @@ class HelpView(discord.ui.View):
         super().__init__(timeout=180)
         self.add_item(HelpDropdown(show_admin_docs))
 
+class ConfirmClearHistoryView(discord.ui.View):
+    def __init__(self, author: discord.Member, guild_id: str):
+        super().__init__(timeout=60)
+        self.author = author
+        self.guild_id = guild_id
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return interaction.user.id == self.author.id
+    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.success, emoji="🟢")
+    async def confirm_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        loop = asyncio.get_event_loop()
+        try:
+            await loop.run_in_executor(None, lambda: player_profiles_col.delete_many({"guild_id": self.guild_id}))
+            self.stop()
+            await interaction.response.edit_message(content="🧹 Wiped registration logs from server caches successfully!", view=None)
+        except pymongo.errors.PyMongoError:
+            await interaction.response.edit_message(content=f"⚠️ Database Operation Failure: Safe Mask Check Error, check environment profiles.", view=None)
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger, emoji="🔴")
+    async def cancel_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.stop()
+        await interaction.response.edit_message(content="🛑 Operation Aborted.", view=None)
+
 @tasks.loop(minutes=5)
 async def auto_code_scraper_loop():
     await bot.wait_until_ready()
     async with aiohttp.ClientSession() as session:
-        # Bypassing typical cloudflare scrape rules via specialized JSON streaming target blocks
         reddit_targets = [
             "https://reddit.com",
             "https://reddit.com"
@@ -289,7 +307,7 @@ async def execute_global_automation_blast(code: str):
         for p_info in players_by_guild.get(guild_id_str, []):
             member = guild.get_member(int(p_info["user_id"]))
             if member:
-                prefilled_url = f"https://asphaltlegendsunite.com{p_info['player_id']}&code={code.upper()}"
+                prefilled_url = f"https://asphaltlegendsunite.com?player_id={p_info['player_id']}&code={code.upper()}"
                 dm_embed = discord.Embed(
                     title="🏁 Reward Pipeline Notification: Link Online", 
                     description=f"A fresh voucher code has matched your player registry matrix. Click the button mapping below to process immediate claiming actions.", 
@@ -422,7 +440,7 @@ async def history_slash(interaction: discord.Interaction):
     embed = discord.Embed(title="🏁 Expanded Redemption Drop History (Last 10 Records)", color=discord.Color.from_rgb(14, 21, 46))
     for idx, row in enumerate(cache_res, 1):
         code = row["code"]
-        manual_url = f"https://asphaltlegendsunite.com{code}"
+        manual_url = f"https://asphaltlegendsunite.com?code={code}"
         embed.add_field(name=f"{idx}. Code Entry Parameters: `{code}`", value=f"🔗 [Launch Claim Portal Shortcut]({manual_url})", inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -474,27 +492,6 @@ async def listplayers_slash(interaction: discord.Interaction):
     for info in server_res:
         embed.add_field(name=f"User Display Profile: {info['username']}", value=f"🆔 Game Account ID: `{info['player_id']}`", inline=False)
     await interaction.response.send_message(embed=embed)
-
-class ConfirmClearHistoryView(discord.ui.View):
-    def __init__(self, author: discord.Member, guild_id: str):
-        super().__init__(timeout=60)
-        self.author = author
-        self.guild_id = guild_id
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return interaction.user.id == self.author.id
-    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.success, emoji="🟢")
-    async def confirm_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        loop = asyncio.get_event_loop()
-        try:
-            await loop.run_in_executor(None, lambda: player_profiles_col.delete_many({"guild_id": self.guild_id}))
-            self.stop()
-            await interaction.response.edit_message(content="🧹 Wiped registration logs from server caches successfully!", view=None)
-        except pymongo.errors.PyMongoError:
-            await interaction.response.edit_message(content=f"⚠️ Database Operation Failure: Safe Mask Check Error, check environment profiles.", view=None)
-    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger, emoji="🔴")
-    async def cancel_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.stop()
-        await interaction.response.edit_message(content="🛑 Operation Aborted.", view=None)
 
 @bot.tree.command(name="clearhistory", description="🧹 Admin Tool: Purges the player configuration registry table dataset for this guild.")
 @is_admin_or_delegated()
