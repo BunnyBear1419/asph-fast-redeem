@@ -565,7 +565,7 @@ TOOL_CATEGORIES = {
         "label": "Progress & Data",
         "emoji": "📊",
         "description": "Personal notes, garage progress, and centralized ALU data health/provenance.",
-        "tools": ["data_health", "notes", "garage_progress"],
+        "tools": ["data_health", "notes"],
     },
 }
 
