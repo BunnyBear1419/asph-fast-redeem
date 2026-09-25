@@ -70,6 +70,30 @@ class CarPickerSelect(discord.ui.Select):
         )
 
 
+class CarSearchModal(discord.ui.Modal):
+    def __init__(self, owner_view, field_name: str, store):
+        super().__init__(title="🔎 Search ALU Cars")
+        self.owner_view = owner_view
+        self.field_name = field_name
+        self.store = store
+        self.query = discord.ui.TextInput(
+            label="Car name",
+            placeholder="Type part of a car name, e.g. Jesko",
+            max_length=100,
+            required=True,
+        )
+        self.add_item(self.query)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        view = CarPickerView(
+            self.owner_view,
+            self.field_name,
+            self.store,
+            query=self.query.value.strip(),
+        )
+        await interaction.response.edit_message(embed=view.embed(), view=view)
+
+
 class CarPickerView(discord.ui.View):
     def __init__(self, owner_view, field_name: str, store, page: int = 0, query: str = ""):
         super().__init__(timeout=300)
@@ -93,10 +117,19 @@ class CarPickerView(discord.ui.View):
             label="Next", style=discord.ButtonStyle.secondary,
             emoji="▶️", row=1, disabled=self.page >= self.total_pages - 1
         )
+        search = discord.ui.Button(
+            label="Search", style=discord.ButtonStyle.primary,
+            emoji="🔎", row=1
+        )
         back = discord.ui.Button(
             label="Back to Tool", style=discord.ButtonStyle.secondary,
             emoji="↩️", row=1
         )
+
+        async def go_search(interaction):
+            await interaction.response.send_modal(
+                CarSearchModal(self.owner_view, self.field_name, self.store)
+            )
 
         async def go_previous(interaction):
             await interaction.response.edit_message(
@@ -121,9 +154,11 @@ class CarPickerView(discord.ui.View):
 
         previous.callback = go_previous
         next_button.callback = go_next
+        search.callback = go_search
         back.callback = go_back
         self.add_item(previous)
         self.add_item(next_button)
+        self.add_item(search)
         self.add_item(back)
 
     def embed(self):
