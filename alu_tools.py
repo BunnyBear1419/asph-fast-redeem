@@ -7,8 +7,10 @@ from discord.ext import commands, tasks
 from bson import ObjectId
 
 from alu_data import load_default_store
+from alu_upgrade_resolver import ALUUpgradeResolver
 
 ALU_DATA = load_default_store()
+ALU_UPGRADES = ALUUpgradeResolver(ALU_DATA)
 
 TOOL_DEFINITIONS = {
     "upgrades": {"label": "Car Upgrades Calculator", "emoji": "🔧", "description": "Plan an upgrade path from your current configuration to a target.", "fields": ["Car", "Current star", "Target star", "Current rank", "Target rank"]},
@@ -267,11 +269,18 @@ def build_tool_result_embed(key, values):
         target = _number(values.get("Target rank"))
         if current is not None and target is not None:
             lines.append(f"Requested rank change: **{target-current:+g}**")
-        lines.append("Upgrade path captured. Exact parts, ranks, Credits, and Tokens require verified ALU upgrade data.")
+        lines.append("Upgrade path captured.")
         if values.get("Car"):
             matches = ALU_DATA.search_cars(values["Car"])
             if matches:
-                lines.append(f"Data match: **{matches[0].name}** ({matches[0].verification.value}).")
+                car = matches[0]
+                lines.append(f"Data match: **{car.name}** ({car.verification.value}).")
+                target_star = int(_number(values.get("Target star")) or 0)
+                if target_star > 0:
+                    resolution = ALU_UPGRADES.resolve(car.id, target_star, 1)
+                    lines.append(f"Upgrade resolver: **{resolution.status}** — {resolution.reason}")
+                    if not resolution.can_calculate:
+                        lines.append("No game-value cost/rank/parts calculation was returned because the source mapping is not verified.")
         days = _number(values.get("Days left"))
         lines.append(f"Days remaining: **{days:g}**" if days is not None else "Add days remaining to support urgency calculations.")
         lines.append("Priority factors: time remaining, reward, progress, and rank readiness.")
@@ -302,7 +311,21 @@ def build_tool_result_embed(key, values):
         lines.append("No future rating outcome is guessed without verified historical data.")
     elif key == "cost":
         lines.append("Cost request captured.")
-        lines.append("Exact upgrade costs require verified ALU cost tables.")
+        if values.get("Car"):
+            matches = ALU_DATA.search_cars(values["Car"])
+            if matches:
+                car = matches[0]
+                target_star = int(_number(values.get("Target star")) or 0)
+                resolution = ALU_UPGRADES.resolve(car.id, target_star, 1) if target_star > 0 else None
+                lines.append(f"Data match: **{car.name}** ({car.verification.value}).")
+                if resolution:
+                    lines.append(f"Upgrade resolver: **{resolution.status}** — {resolution.reason}")
+                    if not resolution.can_calculate:
+                        lines.append("Exact Credits, Tokens, XP, and Import Parts are withheld until the source-table mapping is explicitly verified.")
+            else:
+                lines.append("Car was not found in the centralized ALU data layer.")
+        else:
+            lines.append("Enter a car to check the centralized upgrade resolver.")
     elif key == "events":
         attempts=_number(values.get("Attempts available"))
         progress=_number(values.get("Current progress"))
