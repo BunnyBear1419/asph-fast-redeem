@@ -48,4 +48,4 @@ The importer:
 - records conflicts instead of silently overwriting them
 - exports the resulting store back to the replaceable JSON dataset
 
-No live source data is populated yet. This is intentional: numeric ALU values should only enter the production dataset after the source adapter has collected them and the values have been verified for the current game/version.
+A structured A9Garage snapshot adapter is now available. It preserves the source-native upgrade tables (cost, XP, upgrade/import-part, blueprint, summary, and combined-cost tables) in an UpgradeCatalog, plus the per-car table references and blueprint requirement strings exposed by api_cars.json.\n\nThese third-party snapshot values remain unknown verification. The sync layer does not reinterpret an indexed table into a game meaning unless that mapping is established by source evidence. This prevents a calculator from silently using a guessed cost/part mapping as if it were verified current data.\n\nRun the central sync with:\npython alu_sync.py\n\nThe resulting store can then be replaced or refreshed from MongoDB or another repository implementation without changing the Discord/UI tools.
