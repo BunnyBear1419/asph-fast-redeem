@@ -15,6 +15,8 @@ It includes the Fast Redeem system plus the Asphalt Legends Unite Tools Hub for:
 - Cost Calculator
 - Event Calculator
 - Notes & Reminders
+- Player Hub (garage snapshot, favorites, settings, and global search)
+- Redeem Center with verified-data safeguards
 
 ## ALU data layer
 
@@ -92,6 +94,9 @@ The Discord dashboard now includes the complete planning/tool surface:
 - Rating Difference analysis
 - FAQ
 - Notes & Reminders
+- Global ALU Search across centralized cars, tracks, and events
+- Player Hub for garage snapshots, favorites, settings, and tool discovery
+- Redeem Center that refuses to present unverified/guessed codes as active
 
 All numerical calculations are isolated from the Discord UI in `alu_calculators.py` and `alu_planners.py`. Game values are only presented as current when centralized records are marked `verified_current`; otherwise the tools explain the data state instead of inventing values.
 
