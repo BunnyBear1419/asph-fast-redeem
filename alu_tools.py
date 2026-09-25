@@ -614,8 +614,8 @@ TOOL_CATEGORIES = {
 
 def build_dashboard_embed() -> discord.Embed:
     embed = discord.Embed(
-        title="🏁 ASPHALT LEGENDS UNITE • PLAYER TOOL DASHBOARD",
-        description="**Welcome back, driver.** This is the main tool hub. Choose a section, then choose the tool you want — no command memorizing required.",
+        title="🏁 ASPHALT LEGENDS UNITE • SHOHAN'S COMPANION",
+        description="**Welcome back, driver.**  This is the main ALU tool laboratory.  Choose a section, then choose the tool you want — no command memorizing required.",
         color=TEAL,
     )
     for category in TOOL_CATEGORIES.values():
@@ -624,7 +624,7 @@ def build_dashboard_embed() -> discord.Embed:
             value=category["description"],
             inline=False,
         )
-    embed.set_footer(text="Shohan's Companion • ALU Tools Hub • Select a section to continue")
+    embed.set_footer(text="Shohan's Companion • ALU Laboratory • https://alu.shohanlab.com/")
     return embed
 
 
