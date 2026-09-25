@@ -20,6 +20,7 @@ from alu_data import (
     InMemoryALUDataRepository,
     SourceMetadata,
     Track,
+    EvoProfile,
     UpgradeCatalog,
     UpgradeStage,
     VerificationStatus,
@@ -81,6 +82,21 @@ def normalize_car(raw: Mapping[str, Any], source: SourceMetadata) -> Car:
         max_rank=int(raw["max_rank"]) if raw.get("max_rank") is not None else None,
         stats=stats,
         blueprints=blueprints,
+        **_provenance(raw, source),
+    )
+
+
+def normalize_evo_profile(raw: Mapping[str, Any], source: SourceMetadata) -> EvoProfile:
+    car_id = normalize_id(raw.get("car_id"), prefix="car:")
+    return EvoProfile(
+        id=normalize_id(raw.get("id") or car_id, prefix="evo:"),
+        car_id=car_id,
+        star_levels=int(raw.get("star_levels") or 0),
+        class_name=raw.get("class_name"),
+        blueprint_requirements=[int(x) for x in (raw.get("blueprint_requirements") or [])],
+        stock_stats=dict(raw.get("stock_stats") or {}),
+        archetypes=list(raw.get("archetypes") or []),
+        parts=dict(raw.get("parts") or {}),
         **_provenance(raw, source),
     )
 
@@ -183,6 +199,7 @@ class ALUImporter:
         cars: Iterable[Mapping[str, Any]] = (),
         upgrades: Iterable[Mapping[str, Any]] = (),
         upgrade_catalogs: Iterable[Mapping[str, Any]] = (),
+        evo_profiles: Iterable[Mapping[str, Any]] = (),
         tracks: Iterable[Mapping[str, Any]] = (),
         events: Iterable[Mapping[str, Any]] = (),
         base: ALUDataStore | None = None,
@@ -196,6 +213,7 @@ class ALUImporter:
         car_map = dict(getattr(old_repo, "cars", {}))
         upgrade_map = dict(getattr(old_repo, "upgrades", {}))
         catalog_map = dict(getattr(old_repo, "upgrade_catalogs", {}))
+        evo_map = dict(getattr(old_repo, "evo_profiles", {}))
         track_map = dict(getattr(old_repo, "tracks", {}))
         event_map = dict(getattr(old_repo, "events", {}))
 
@@ -225,6 +243,9 @@ class ALUImporter:
         for raw in upgrade_catalogs:
             record = normalize_upgrade_catalog(raw, source)
             merge(catalog_map, record.id, record, "upgrade_catalog")
+        for raw in evo_profiles:
+            record = normalize_evo_profile(raw, source)
+            merge(evo_map, record.car_id, record, "evo_profile")
         for raw in tracks:
             record = normalize_track(raw, source)
             merge(track_map, record.id, record, "track")
@@ -238,6 +259,7 @@ class ALUImporter:
                 cars=car_map.values(),
                 upgrades=upgrade_map.values(),
                 upgrade_catalogs=catalog_map.values(),
+                evo_profiles=evo_map.values(),
                 tracks=track_map.values(),
                 events=event_map.values(),
             ),
