@@ -446,9 +446,11 @@ def build_dashboard_embed() -> discord.Embed:
         description=("Select a tool below to open its Discord interface.\n\nThe dashboard covers reference lookups, calculators, planners, comparisons, and private notes. Each tool uses explicit inputs or verified centralized records; numerical game data is never invented."),
         color=TEAL,
     )
-    embed.add_field(name="Available Tools", value="🔧 Upgrades  •  📊 Comparator  •  🏆 Priority  •  📅 Calendar\n❓ FAQ  •  🚙 Hunt  •  🏎️ Simulation  •  🗺️ Maps\n🔮 Rating  •  💸 Cost  •  🏁 Events
-🧩 Blueprints • 🛠️ Upgrade Planner • 🔩 Parts • 📈 Rank • ⭐ Star-Up
-🚗 Garage Progress • 🎁 Event Rewards • 🧬 EVO • 🏎️ Car Compare • 📝 Notes", inline=False)
+    embed.add_field(name="Available Tools", value=("🔧 Upgrades  •  📊 Comparator  •  🏆 Priority  •  📅 Calendar\n"
+            "❓ FAQ  •  🚙 Hunt  •  🏎️ Simulation  •  🗺️ Maps\n"
+            "🔮 Rating  •  💸 Cost  •  🏁 Events\n"
+            "🧩 Blueprints • 🛠️ Upgrade Planner • 🔩 Parts • 📈 Rank • ⭐ Star-Up\n"
+            "🚗 Garage Progress • 🎁 Event Rewards • 🧬 EVO • 🏎️ Car Compare • 📝 Notes"), inline=False)
     embed.set_footer(text="🧪 Shohan's Lab  •  🌐 alu.shohanlab.com")
     return embed
 
