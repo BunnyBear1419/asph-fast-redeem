@@ -105,3 +105,24 @@ def test_a9garage_upgrade_catalog_preserves_indexed_tables():
     assert record["car_table_refs"]["car:1"]["slot_4"] == 0
     assert record["car_blueprint_requirements"]["car:1"] == [5, 8, 30]
     assert record["verification"] == "unknown"
+
+
+def test_a9garage_evo_profile_links_to_numeric_car_id():
+    from alu_sources import _a9_evo_profiles
+
+    payload = {
+        "evo_data": {
+            "test": {
+                "info": {"name": "Test Car", "stars": 5, "class": "D", "bp": [10]},
+                "stock": {},
+                "archetypes": [],
+                "parts": {},
+            }
+        }
+    }
+    rows = _a9_evo_profiles(
+        payload,
+        collected_at="2026-09-24T00:00:00+00:00",
+        car_name_to_id={"test car": "car:123"},
+    )
+    assert rows[0]["car_id"] == "car:123"
