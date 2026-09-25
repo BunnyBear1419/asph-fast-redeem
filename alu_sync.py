@@ -16,12 +16,28 @@ from alu_importer import ALUImporter, save_store
 from alu_sources import collect_a9garage_backup_records
 
 
-async def sync_a9garage(output_path: str | None = None) -> dict:
+async def sync_a9garage(output_path: str | None = None, *, persist: bool = false) -> dict:
+    """Inspect A9Garage without redistributing its raw snapshot data."""
     payload = await collect_a9garage_backup_records()
-    importer = ALUImporter(())
-    # The source registry is loaded from the existing store so future sources
-    # can be merged without replacing unrelated records.
     store = load_default_store()
+    source = store.source("a9garage")
+    if source is None:
+        raise RuntimeError("A9Garage source metadata is missing.")
+    if persist and source.reuse_status != "redistributable":
+        raise RuntimeError(
+            "Refusing to persist A9Garage snapshot data: source reuse status is "
+            f"{source.reuse_status!r}, not explicitly redistributable."
+        )
+    if not persist:
+        return {
+            "destination": None,
+            "persisted": False,
+            "counts": store.data_status(),
+            "source_counts": payload["counts"],
+            "verification": payload["verification"],
+            "reuse_status": source.reuse_status,
+        }
+
     importer = ALUImporter(store.sources.values())
     merged = importer.import_records(
         source_id="a9garage",
@@ -36,10 +52,12 @@ async def sync_a9garage(output_path: str | None = None) -> dict:
     save_store(merged, destination)
     return {
         "destination": destination,
+        "persisted": True,
         "counts": merged.data_status(),
         "conflicts": len(importer.conflicts),
         "source_counts": payload["counts"],
         "verification": payload["verification"],
+        "reuse_status": source.reuse_status,
     }
 
 
@@ -47,7 +65,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Sync structured ALU source data.")
     parser.add_argument("--output", help="Optional output JSON path.")
     args = parser.parse_args()
-    result = asyncio.run(sync_a9garage(args.output))
+    result = asyncio.run(sync_a9garage(args.output, persist=False))
     print(result)
 
 
