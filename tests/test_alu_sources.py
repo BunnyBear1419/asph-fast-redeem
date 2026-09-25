@@ -66,3 +66,26 @@ async def test_sync_merges_structured_records(monkeypatch, tmp_path):
     result = await alu_sync.sync_a9garage(str(tmp_path / "alu_data.json"))
     assert result["counts"]["cars"] == 1
     assert result["verification"] == "unknown"
+
+
+def test_a9garage_upgrade_catalog_preserves_indexed_tables():
+    from alu_sources import _a9_upgrade_catalog
+
+    payload = {
+        "v": 1,
+        "cars": [[1, "Test", "Car", 0, 3, 0, [], [], [], [], 0, 0, 0, 0, "x.webp", "5 / 8 / 30", 43, None]],
+        "cost_tables": [[[1150]]],
+        "exp_tables": [[[60]]],
+        "upg_tables": [[[5, 0, 0]]],
+        "bp_tables": [[8, 30]],
+        "sum_tables": [[[20, 5000, 100000]]],
+        "cd_tables": [[[1, 5, 68200]]],
+    }
+    record = _a9_upgrade_catalog(payload, collected_at="2026-09-24T00:00:00+00:00")
+
+    assert record["source_schema"] == "api_cars.json"
+    assert record["cost_tables"] == [[[1150]]]
+    assert record["car_table_refs"]["car:1"]["engine"] == 0
+    assert record["car_table_refs"]["car:1"]["tires"] == 0
+    assert record["car_blueprint_requirements"]["car:1"] == [5, 8, 30]
+    assert record["verification"] == "unknown"
