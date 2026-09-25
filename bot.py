@@ -13,6 +13,11 @@ from alu_tools import setup_alu_tools
 
 PROJECT_NAME = "Shohan's Companion"
 
+# Explicitly configure gateway intents before constructing the Bot.
+# Message Content must also be enabled in the Discord Developer Portal.
+BOT_INTENTS = discord.Intents.default()
+BOT_INTENTS.message_content = True
+
 
 class KeepAliveHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -59,8 +64,7 @@ redeem_codes_col = db["alu_redeem_codes"]
 
 class AsphaltBot(commands.Bot):
     def __init__(self):
-        intents = discord.Intents.default()
-        super().__init__(command_prefix="!", intents=intents)
+        super().__init__(command_prefix="!", intents=BOT_INTENTS)
 
     async def setup_hook(self):
         loop = asyncio.get_running_loop()
