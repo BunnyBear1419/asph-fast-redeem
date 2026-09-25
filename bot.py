@@ -69,6 +69,7 @@ guild_config_col = db["guild_config"]
 player_profiles_col = db["player_profiles"]
 scraper_cache_col = db["scraper_cache"]
 backups_archive_col = db["daily_backups_archive"]
+tool_notes_col = db["alu_tool_notes"]
 
 class AsphaltBot(commands.Bot):
     def __init__(self):
@@ -81,7 +82,7 @@ class AsphaltBot(commands.Bot):
     async def setup_hook(self):
         if not auto_code_scraper_loop.is_running():
             auto_code_scraper_loop.start()
-        await setup_alu_tools(self)
+        await setup_alu_tools(self, tool_notes_col)
         print("🟢 Background Scraping Engine successfully initialized.")
         print("🛠️ Asphalt Legends Unite Tools Hub registered.")
 
