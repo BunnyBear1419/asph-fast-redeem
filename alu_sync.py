@@ -26,6 +26,7 @@ async def sync_a9garage(output_path: str | None = None) -> dict:
     merged = importer.import_records(
         source_id="a9garage",
         cars=payload["cars"],
+        upgrade_catalogs=payload.get("upgrade_catalogs", []),
         tracks=payload["tracks"],
         events=payload["events"],
         base=store,
