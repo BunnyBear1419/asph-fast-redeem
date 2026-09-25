@@ -35,3 +35,17 @@ Reference sources currently registered:
 - Gameloft documentation
 
 This structure keeps the data source replaceable: a future MongoDB or refreshed import can replace the repository without requiring a rewrite of the Discord UI/calculators.
+
+## ALU importer / normalization pipeline
+
+The repository now includes `alu_importer.py`, a source-agnostic import pipeline. Source adapters can pass normalized dictionaries into the importer without coupling the Discord tools to scraping code.
+
+The importer:
+- normalizes stable IDs for cars, upgrades, tracks, and events
+- preserves source URL, collection time, game version, notes, and verification status
+- rejects malformed records instead of guessing missing values
+- merges duplicate records using verification status first and collection time second
+- records conflicts instead of silently overwriting them
+- exports the resulting store back to the replaceable JSON dataset
+
+No live source data is populated yet. This is intentional: numeric ALU values should only enter the production dataset after the source adapter has collected them and the values have been verified for the current game/version.
