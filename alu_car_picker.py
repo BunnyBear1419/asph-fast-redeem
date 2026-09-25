@@ -346,7 +346,7 @@ class CarPickerView(discord.ui.View):
         )
         reset = discord.ui.Button(
             label="Reset", style=discord.ButtonStyle.secondary,
-            emoji="↻", row=3
+            emoji="🔄", row=3
         )
         back = discord.ui.Button(
             label="Back to Tool", style=discord.ButtonStyle.secondary,
