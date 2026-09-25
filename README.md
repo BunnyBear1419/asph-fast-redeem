@@ -29,7 +29,7 @@ Each imported record carries:
 - game/version context
 - verification status (verified_current, older_reference, or unknown)
 
-The repository contains source metadata and an intentionally empty data store. Player state is persisted separately in MongoDB so personal garage, favorites, settings, usage history, notes, and redeem-code records do not contaminate the central reference dataset. No numeric car, upgrade, blueprint, track, or event values are presented as current until they are imported and verified.
+The repository now includes a 346-record reference-only vehicle catalog across Classes D/C/B/A/S. Player state is persisted separately in MongoDB so personal garage, favorites, settings, usage history, notes, and redeem-code records do not contaminate the central reference dataset. No numeric car, upgrade, blueprint, track, or event values are presented as current until they are imported and verified.
 
 Reference sources currently registered:
 - A9Garage
