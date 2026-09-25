@@ -1,6 +1,10 @@
+import asyncio
+from datetime import datetime, timezone
+
 import discord
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
+from bson import ObjectId
 
 TOOL_DEFINITIONS = {
     "upgrades": {"label": "Car Upgrades Calculator", "emoji": "🔧", "description": "Plan upgrade paths and compare target configurations.", "fields": ["Car", "Current star", "Target star", "Current upgrades"]},
@@ -49,6 +53,150 @@ class ToolInputModal(discord.ui.Modal):
         )
         embed.set_footer(text="🧪 Shohan's Lab  •  🌐 alu.shohanlab.com")
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+class NotesHubView(discord.ui.View):
+    def __init__(self, cog):
+        super().__init__(timeout=300)
+        self.cog = cog
+
+    @discord.ui.button(label="Add Note", style=discord.ButtonStyle.primary, emoji="➕")
+    async def add_note(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(NoteModal(self.cog))
+
+    @discord.ui.button(label="My Notes", style=discord.ButtonStyle.secondary, emoji="📋")
+    async def list_notes(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.cog.show_notes(interaction)
+
+    @discord.ui.button(label="Back to Tools", style=discord.ButtonStyle.secondary, emoji="↩️")
+    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(embed=build_dashboard_embed(), view=AsphaltToolsView())
+
+
+class NoteModal(discord.ui.Modal):
+    def __init__(self, cog):
+        super().__init__(title="📝 Add Note / Reminder")
+        self.cog = cog
+        self.title_input = discord.ui.TextInput(label="Title", max_length=100, required=True)
+        self.note_input = discord.ui.TextInput(label="Note", style=discord.TextStyle.paragraph, max_length=1500, required=True)
+        self.reminder_input = discord.ui.TextInput(
+            label="Reminder (optional, UTC)",
+            placeholder="YYYY-MM-DD HH:MM",
+            max_length=16,
+            required=False,
+        )
+        self.add_item(self.title_input)
+        self.add_item(self.note_input)
+        self.add_item(self.reminder_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        reminder_at = None
+        raw_reminder = self.reminder_input.value.strip()
+        if raw_reminder:
+            try:
+                reminder_at = datetime.strptime(raw_reminder, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
+            except ValueError:
+                return await interaction.response.send_message(
+                    "⚠️ Reminder format must be YYYY-MM-DD HH:MM in UTC.",
+                    ephemeral=True,
+                )
+
+        doc = {
+            "user_id": str(interaction.user.id),
+            "guild_id": str(interaction.guild_id) if interaction.guild_id else None,
+            "username": interaction.user.name,
+            "title": self.title_input.value.strip(),
+            "note": self.note_input.value.strip(),
+            "reminder_at": reminder_at,
+            "notified": False,
+            "created_at": datetime.now(timezone.utc),
+        }
+        await self.cog.insert_note(doc)
+        reminder_text = f" for <t:{int(reminder_at.timestamp())}:F>" if reminder_at else ""
+        await interaction.response.send_message(
+            f"✅ Note saved.{reminder_text}\n\nUse My Notes to view your saved entries.",
+            ephemeral=True,
+        )
+
+
+class NoteSelect(discord.ui.Select):
+    def __init__(self, cog, notes):
+        self.cog = cog
+        self.notes = notes
+        options = []
+        for note in notes[:25]:
+            note_id = str(note["_id"])
+            title = note.get("title", "Untitled")[:100]
+            description = note.get("note", "").replace("\n", " ")[:100] or "No note text"
+            options.append(discord.SelectOption(label=title, value=note_id, description=description))
+        super().__init__(placeholder="Select a note to view...", options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        selected = next((n for n in self.notes if str(n["_id"]) == self.values[0]), None)
+        if not selected:
+            return await interaction.response.send_message("⚠️ That note is no longer available.", ephemeral=True)
+        embed = discord.Embed(
+            title=f'📝 {selected.get("title", "Untitled")}',
+            description=selected.get("note", "No note text."),
+            color=TEAL,
+        )
+        if selected.get("reminder_at"):
+            reminder = selected["reminder_at"]
+            if reminder.tzinfo is None:
+                reminder = reminder.replace(tzinfo=timezone.utc)
+            embed.add_field(name="⏰ Reminder", value=f"<t:{int(reminder.timestamp())}:F>", inline=False)
+        embed.set_footer(text=f'Note ID: {selected["_id"]} • 🧪 Shohan\'s Lab  •  🌐 alu.shohanlab.com')
+        await interaction.response.edit_message(embed=embed, view=NoteDetailView(self.cog, str(selected["_id"])))
+
+
+class NotesListView(discord.ui.View):
+    def __init__(self, cog, notes):
+        super().__init__(timeout=300)
+        self.cog = cog
+        self.add_item(NoteSelect(cog, notes))
+
+    @discord.ui.button(label="Add Note", style=discord.ButtonStyle.primary, emoji="➕", row=1)
+    async def add_note(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(NoteModal(self.cog))
+
+    @discord.ui.button(label="Back", style=discord.ButtonStyle.secondary, emoji="↩️", row=1)
+    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(embed=build_notes_embed(), view=NotesHubView(self.cog))
+
+
+class NoteDetailView(discord.ui.View):
+    def __init__(self, cog, note_id):
+        super().__init__(timeout=300)
+        self.cog = cog
+        self.note_id = note_id
+
+    @discord.ui.button(label="Delete Note", style=discord.ButtonStyle.danger, emoji="🗑️")
+    async def delete(self, interaction: discord.Interaction, button: discord.ui.Button):
+        try:
+            deleted = await self.cog.delete_note(interaction.user.id, self.note_id)
+        except Exception:
+            deleted = False
+        if deleted:
+            await interaction.response.edit_message(embed=build_notes_embed(), view=NotesHubView(self.cog))
+        else:
+            await interaction.response.send_message("⚠️ Note not found or could not be deleted.", ephemeral=True)
+
+    @discord.ui.button(label="Back to Notes", style=discord.ButtonStyle.secondary, emoji="↩️")
+    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.cog.show_notes(interaction)
+
+
+def build_notes_embed() -> discord.Embed:
+    embed = discord.Embed(
+        title="📝 Notes & Reminders",
+        description=(
+            "Save private notes to MongoDB and optionally schedule a Discord DM reminder.\n\n"
+            "Reminder format: YYYY-MM-DD HH:MM (UTC).\n"
+            "Your saved notes are scoped to your Discord account."
+        ),
+        color=TEAL,
+    )
+    embed.set_footer(text="🧪 Shohan's Lab  •  🌐 alu.shohanlab.com")
+    return embed
 
 
 class ToolActionView(discord.ui.View):
@@ -101,13 +249,94 @@ class AsphaltToolsView(discord.ui.View):
 
 
 class AsphaltToolsCog(commands.Cog):
-    def __init__(self, bot: discord.Client):
+    def __init__(self, bot: discord.Client, notes_collection):
         self.bot = bot
+        self.notes_collection = notes_collection
+        self.reminder_loop.start()
+
+    async def insert_note(self, doc):
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, lambda: self.notes_collection.insert_one(doc))
+
+    async def show_notes(self, interaction: discord.Interaction):
+        loop = asyncio.get_event_loop()
+        user_id = str(interaction.user.id)
+        notes = await loop.run_in_executor(
+            None,
+            lambda: list(self.notes_collection.find({"user_id": user_id}).sort("created_at", -1).limit(25)),
+        )
+        embed = discord.Embed(
+            title="📋 My Notes",
+            description=f"You have {len(notes)} saved note(s). Select one below to view or delete it.",
+            color=TEAL,
+        )
+        if not notes:
+            embed.description = "You have no saved notes yet."
+            view = NotesHubView(self)
+        else:
+            view = NotesListView(self, notes)
+        await interaction.response.edit_message(embed=embed, view=view)
+
+    async def delete_note(self, user_id, note_id):
+        loop = asyncio.get_event_loop()
+        try:
+            object_id = ObjectId(note_id)
+        except Exception:
+            return False
+        result = await loop.run_in_executor(
+            None,
+            lambda: self.notes_collection.delete_one({"_id": object_id, "user_id": str(user_id)}),
+        )
+        return result.deleted_count == 1
+
+    @tasks.loop(seconds=30)
+    async def reminder_loop(self):
+        now = datetime.now(timezone.utc)
+        loop = asyncio.get_event_loop()
+        reminders = await loop.run_in_executor(
+            None,
+            lambda: list(self.notes_collection.find({
+                "reminder_at": {"$lte": now},
+                "notified": {"$ne": True},
+            }).limit(50)),
+        )
+        for note in reminders:
+            user = self.bot.get_user(int(note["user_id"]))
+            if user is None:
+                try:
+                    user = await self.bot.fetch_user(int(note["user_id"]))
+                except Exception:
+                    user = None
+            if user is not None:
+                try:
+                    await user.send(
+                        f"Shohan's Companion Reminder\n\n"
+                        f"{note.get('title', 'Reminder')}\n{note.get('note', '')}"
+                    )
+                except (discord.Forbidden, discord.HTTPException):
+                    pass
+            await loop.run_in_executor(
+                None,
+                lambda note_id=note["_id"]: self.notes_collection.update_one(
+                    {"_id": note_id}, {"$set": {"notified": True, "notified_at": now}}
+                ),
+            )
+
+    @reminder_loop.before_loop
+    async def before_reminder_loop(self):
+        await self.bot.wait_until_ready()
+
+    def cog_unload(self):
+        self.reminder_loop.cancel()
 
     @app_commands.command(name="tools", description="🛠️ Open the Asphalt Legends Unite tools dashboard.")
     async def tools(self, interaction: discord.Interaction):
         await interaction.response.send_message(embed=build_dashboard_embed(), view=AsphaltToolsView(), ephemeral=True)
 
+    @app_commands.command(name="notes", description="📝 Open your private Notes & Reminders.")
+    async def notes(self, interaction: discord.Interaction):
+        await interaction.response.send_message(embed=build_notes_embed(), view=NotesHubView(self), ephemeral=True)
 
-async def setup_alu_tools(bot):
-    await bot.add_cog(AsphaltToolsCog(bot))
+
+async def setup_alu_tools(bot, notes_collection):
+    await bot.add_cog(AsphaltToolsCog(bot, notes_collection))
