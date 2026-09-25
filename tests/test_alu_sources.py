@@ -33,3 +33,36 @@ def test_a9garage_car_row_normalization_preserves_unknown_verification():
     assert record["max_rank"] == 1500
     assert record["verification"] == "unknown"
     assert record["source_url"] == A9GARAGE_BACKUP_ENDPOINTS["cars"]
+
+
+@pytest.mark.asyncio
+async def test_sync_merges_structured_records(monkeypatch, tmp_path):
+    from alu_data import empty_store
+    import alu_sync
+
+    payload = {
+        "cars": [{
+            "id": 1,
+            "name": "Test Car",
+            "manufacturer": "Test",
+            "star_levels": 5,
+            "max_rank": 1500,
+            "stats": {"rank": 1500},
+            "blueprints": {},
+            "source_url": "https://example.test/cars.json",
+            "collected_at": "2026-09-24T00:00:00+00:00",
+            "verification": "unknown",
+            "notes": "",
+        }],
+        "tracks": [],
+        "events": [],
+        "counts": {"cars": 1, "tracks": 0, "events": 0},
+        "verification": "unknown",
+    }
+    async def fake_collect():
+        return payload
+
+    monkeypatch.setattr(alu_sync, "collect_a9garage_backup_records", fake_collect)
+    result = await alu_sync.sync_a9garage(str(tmp_path / "alu_data.json"))
+    assert result["counts"]["cars"] == 1
+    assert result["verification"] == "unknown"
