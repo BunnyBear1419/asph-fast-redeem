@@ -47,3 +47,33 @@ def test_invalid_upgrade_rejected():
     except ImportValidationError:
         return
     raise AssertionError("Invalid upgrade should be rejected")
+
+
+def test_upgrade_catalog_imports_into_central_store():
+    from alu_data import empty_store
+    from alu_importer import ALUImporter
+
+    store = ALUImporter(empty_store().sources.values()).import_records(
+        source_id="a9garage",
+        upgrade_catalogs=[{
+            "id": "a9garage-upgrade-catalog",
+            "source_schema": "api_cars.json",
+            "source_version": 1,
+            "cost_tables": [[[100]]],
+            "exp_tables": [[[10]]],
+            "upg_tables": [[[1]]],
+            "bp_tables": [[5]],
+            "sum_tables": [[[1]]],
+            "cd_tables": [[[1]]],
+            "car_table_refs": {"car:1": {"engine": 0}},
+            "car_blueprint_requirements": {"car:1": [5]},
+            "source_url": "https://example.test/api_cars.json",
+            "collected_at": "2026-09-24T00:00:00+00:00",
+            "verification": "unknown",
+        }],
+        base=empty_store(),
+    )
+    catalog = store.upgrade_catalog()
+    assert catalog is not None
+    assert catalog.cost_tables == [[[100]]]
+    assert catalog.car_table_refs["car:1"]["engine"] == 0
