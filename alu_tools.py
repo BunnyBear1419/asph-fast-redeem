@@ -868,20 +868,6 @@ class AsphaltToolsCog(commands.Cog):
     def cog_unload(self):
         self.reminder_loop.cancel()
 
-    @app_commands.command(name="dashboard", description="🏁 Open the Shohan's Companion ALU player dashboard.")
-    async def dashboard(self, interaction: discord.Interaction):
-        view = CompanionDashboardView(self, interaction.guild_id, interaction.user.id)
-        await interaction.response.send_message(embed=build_dashboard_embed(), view=view, ephemeral=True)
-
-    @app_commands.command(name="tools", description="🛠️ Open the Shohan's Companion ALU tools dashboard.")
-    async def tools(self, interaction: discord.Interaction):
-        view = CompanionDashboardView(self, interaction.guild_id, interaction.user.id)
-        await interaction.response.send_message(embed=build_dashboard_embed(), view=view, ephemeral=True)
-
-    @app_commands.command(name="notes", description="📝 Open your private Notes & Reminders.")
-    async def notes(self, interaction: discord.Interaction):
-        await interaction.response.send_message(embed=build_notes_embed(), view=NotesHubView(self), ephemeral=True)
-
 
 async def setup_alu_tools(bot, notes_collection, garage_collection=None, favorites_collection=None, settings_collection=None, usage_collection=None, redeem_collection=None):
     await bot.add_cog(AsphaltToolsCog(bot, notes_collection, garage_collection, favorites_collection, settings_collection, usage_collection, redeem_collection))
