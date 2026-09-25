@@ -700,7 +700,7 @@ class CompanionDashboardView(discord.ui.View):
         data = TOOL_CATEGORIES[category]
         embed = discord.Embed(
             title=f'{data["emoji"]} {data["label"].upper()}',
-            description=f'{data["description"]}\n\n**Choose an action below.** Use ↩️ Back anytime to return to the hub.',
+            description=f'{data["description"]}\n\n**Choose an action below.** Use ↩️ Back anytime to return to the hub.\n\n**Navigation:** ↩️ Back • 🏠 Home • 🔄 Refresh • ❓ Help • ✖ Close',
             color=TEAL,
         )
         await interaction.response.edit_message(embed=embed, view=self)
