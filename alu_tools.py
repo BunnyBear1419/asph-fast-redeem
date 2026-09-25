@@ -267,11 +267,11 @@ def build_tool_result_embed(key, values):
         target = _number(values.get("Target rank"))
         if current is not None and target is not None:
             lines.append(f"Requested rank change: **{target-current:+g}**")
-        lines.append("Upgrade path captured. Exact parts, ranks, Credits, and Tokens require verified ALU upgrade data.")\n        if values.get("Car"):\n            matches = ALU_DATA.search_cars(values["Car"])\n            if matches:\n                lines.append(f"Data match: **{matches[0].name}** ({matches[0].verification.value}).")
-    elif key == "comparator":
-        lines.append(f"**{values.get('Car A','Car A')}** vs **{values.get('Car B','Car B')}**")
-        lines.append("User-supplied stats are preserved for comparison. Missing game stats are never invented.")
-    elif key == "priority":
+        lines.append("Upgrade path captured. Exact parts, ranks, Credits, and Tokens require verified ALU upgrade data.")
+        if values.get("Car"):
+            matches = ALU_DATA.search_cars(values["Car"])
+            if matches:
+                lines.append(f"Data match: **{matches[0].name}** ({matches[0].verification.value}).")
         days = _number(values.get("Days left"))
         lines.append(f"Days remaining: **{days:g}**" if days is not None else "Add days remaining to support urgency calculations.")
         lines.append("Priority factors: time remaining, reward, progress, and rank readiness.")
@@ -336,9 +336,9 @@ def build_tool_embed(key: str) -> discord.Embed:
     tool = TOOL_DEFINITIONS[key]
     embed = discord.Embed(title=f'{tool["emoji"]} {tool["label"]}', description=tool["description"], color=TEAL)
     embed.add_field(name="Discord Interface", value="Use **Enter Tool Inputs** to open the input form for this tool.", inline=False)
-    status = ALU_DATA.data_status()\n    embed.add_field(name="ALU data layer", value=(f"Centralized source registry active • {status[\"cars\"]} cars • {status[\"upgrade_stages\"]} upgrade stages • {status[\"tracks\"]} tracks • {status[\"events\"]} events.\nGame values remain unavailable until imported and verified."), inline=False)\n    embed.add_field(name="Planned data layer", value="The interface is separated from the calculation/data engine so verified ALU data can be added or refreshed without rebuilding the Discord UI.", inline=False)
-    embed.set_footer(text="🧪 Shohan's Lab  •  🌐 alu.shohanlab.com")
-    return embed
+    status = ALU_DATA.data_status()
+    embed.add_field(name="ALU data layer", value=(f"Centralized source registry active • {status[\"cars\"]} cars • {status[\"upgrade_stages\"]} upgrade stages • {status[\"tracks\"]} tracks • {status[\"events\"]} events.\\nGame values remain unavailable until imported and verified."), inline=False)
+    embed.add_field(name="Planned data layer", value="The interface is separated from the calculation/data engine so verified ALU data can be added or refreshed without rebuilding the Discord UI.", inline=False)
 
 
 def build_dashboard_embed() -> discord.Embed:
