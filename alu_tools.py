@@ -737,7 +737,7 @@ class CompanionDashboardView(discord.ui.View):
         home = discord.ui.Button(label="🏠 Home", style=discord.ButtonStyle.primary, custom_id="companion_home", row=2)
         refresh = discord.ui.Button(label="🔄 Refresh", style=discord.ButtonStyle.secondary, custom_id="companion_refresh", row=2)
         help_button = discord.ui.Button(label="❓ Help", style=discord.ButtonStyle.secondary, custom_id="companion_help", row=2)
-        search_button = discord.ui.Button(label="🔎 Find Tool", style=discord.ButtonStyle.secondary, custom_id="companion_search", row=2)
+        search_button = discord.ui.Button(label="🔎 Find Tool", style=discord.ButtonStyle.secondary, custom_id="companion_search", row=3)
         close = discord.ui.Button(label="✖ Close", style=discord.ButtonStyle.danger, custom_id="companion_close", row=2)
 
         async def go_back(interaction):
