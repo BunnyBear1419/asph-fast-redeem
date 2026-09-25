@@ -75,6 +75,7 @@ A9GARAGE_BACKUP_ENDPOINTS = {
     "cars": f"{A9GARAGE_BACKUP_BASE}/api_cars.json",
     "tracks": f"{A9GARAGE_BACKUP_BASE}/api_tracks.json",
     "calendar": f"{A9GARAGE_BACKUP_BASE}/api_calendar.json",
+    "evo": f"{A9GARAGE_BACKUP_BASE}/api_evo.json",
 }
 
 
@@ -162,16 +163,41 @@ def _a9_upgrade_catalog(payload: Mapping[str, Any], *, collected_at: str) -> dic
         "notes": "Indexed A9Garage upgrade/cost/XP/blueprint tables preserved verbatim; semantics are not independently verified.",
     }
 
+def _a9_evo_profiles(payload: Mapping[str, Any], *, collected_at: str) -> list[dict[str, Any]]:
+    profiles = []
+    for name, row in (payload.get("evo_data") or {}).items():
+        if not isinstance(row, Mapping):
+            continue
+        info = row.get("info") or {}
+        profiles.append({
+            "id": f"evo:{name}",
+            "car_id": f"car:{str(info.get('name') or name)}",
+            "star_levels": int(info.get("stars") or 0),
+            "class_name": info.get("class"),
+            "blueprint_requirements": [int(x) for x in (info.get("bp") or []) if isinstance(x, (int, float))],
+            "stock_stats": dict(row.get("stock") or {}),
+            "archetypes": list(row.get("archetypes") or []),
+            "parts": dict(row.get("parts") or {}),
+            "source_url": A9GARAGE_BACKUP_ENDPOINTS["evo"],
+            "collected_at": collected_at,
+            "verification": VerificationStatus.UNKNOWN.value,
+            "notes": "Imported from A9Garage EVO structured snapshot.",
+        })
+    return profiles
+
+
 async def collect_a9garage_backup_records() -> dict[str, Any]:
     """Collect structured A9Garage backup data without declaring it current."""
     collected_at = datetime.now(timezone.utc).isoformat()
-    cars_payload, tracks_payload, calendar_payload = await asyncio.gather(
+    cars_payload, tracks_payload, calendar_payload, evo_payload = await asyncio.gather(
         fetch_json(A9GARAGE_BACKUP_ENDPOINTS["cars"]),
         fetch_json(A9GARAGE_BACKUP_ENDPOINTS["tracks"]),
         fetch_json(A9GARAGE_BACKUP_ENDPOINTS["calendar"]),
+        fetch_json(A9GARAGE_BACKUP_ENDPOINTS["evo"]),
     )
 
     upgrade_catalog = _a9_upgrade_catalog(cars_payload, collected_at=collected_at)
+    evo_profiles = _a9_evo_profiles(evo_payload, collected_at=collected_at)
     cars = [
         _a9_car_record(row, collected_at=collected_at)
         for row in cars_payload.get("cars", [])
@@ -228,11 +254,12 @@ async def collect_a9garage_backup_records() -> dict[str, Any]:
         "collected_at": collected_at,
         "cars": cars,
         "upgrade_catalogs": [upgrade_catalog],
+        "evo_profiles": evo_profiles,
         "tracks": tracks,
         "events": events,
         "source_endpoints": dict(A9GARAGE_BACKUP_ENDPOINTS),
         "source_schema_version": cars_payload.get("v"),
-        "counts": {"cars": len(cars), "upgrade_catalogs": 1, "tracks": len(tracks), "events": len(events)},
+        "counts": {"cars": len(cars), "upgrade_catalogs": 1, "evo_profiles": len(evo_profiles), "tracks": len(tracks), "events": len(events)},
         "verification": VerificationStatus.UNKNOWN.value,
     }
 
