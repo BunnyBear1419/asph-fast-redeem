@@ -17,6 +17,7 @@ It is a tools-only Asphalt Legends Unite companion. The primary /dashboard comma
 - Notes & Reminders
 - Player Hub (garage snapshot, favorites, settings, and global search)
 - Redeem Center with verified-data safeguards
+- Native car picker with pagination, search, and automatic prefill for car-based tools
 
 ## ALU data layer
 
@@ -98,7 +99,7 @@ The Discord dashboard now includes the complete planning/tool surface:
 - Player Hub for garage snapshots, favorites, settings, and tool discovery
 - Redeem Center that refuses to present unverified/guessed codes as active
 
-All numerical calculations are isolated from the Discord UI in `alu_calculators.py` and `alu_planners.py`. Game values are only presented as current when centralized records are marked `verified_current`; otherwise the tools explain the data state instead of inventing values.
+Car selection is centralized in `alu_car_picker.py`: Discord's 25-option select limit is handled with pagination, a car-name search modal, and automatic prefill for Car / Car A / Car B inputs. All numerical calculations are isolated from the Discord UI in `alu_calculators.py` and `alu_planners.py`. Game values are only presented as current when centralized records are marked `verified_current`; otherwise the tools explain the data state instead of inventing values.
 
 ### Automated tests
 
