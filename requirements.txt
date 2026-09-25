@@ -1,4 +1,4 @@
-audioop-lts
+audioop-lts; python_version >= "3.13"
 discord.py==2.4.0
 pymongo==4.6.1
 aiohttp==3.10.5
