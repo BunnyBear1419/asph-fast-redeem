@@ -655,6 +655,12 @@ class ToolSearchView(discord.ui.View):
         self.owner_view = owner_view
         self.add_item(ToolSearchResultSelect(owner_view, results))
 
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if str(interaction.guild_id) != self.owner_view.guild_id or str(interaction.user.id) != self.owner_view.user_id:
+            await interaction.response.send_message("❌ This tool search belongs to another player.", ephemeral=True)
+            return False
+        return True
+
     @discord.ui.button(label="↩️ Back to Dashboard", style=discord.ButtonStyle.secondary, emoji="↩️", row=1)
     async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(embed=build_dashboard_embed(), view=self.owner_view)
