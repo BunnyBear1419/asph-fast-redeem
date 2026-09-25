@@ -85,7 +85,8 @@ class AsphaltBot(commands.Bot):
             usage_collection=usage_col,
             redeem_collection=redeem_codes_col,
         )
-        print("ALU player-tool dashboard registered.")
+        synced = await self.tree.sync()
+        print(f"ALU player-tool dashboard registered ({len(synced)} public commands).")
         print("Persistent garage, favorites, settings, usage, notes, and redeem-code storage initialized.")
 
 
@@ -103,10 +104,8 @@ async def on_ready():
 @bot.tree.command(name="dashboard", description="🏁 Open the Asphalt Legends Unite player tools dashboard.")
 async def dashboard(interaction: discord.Interaction):
     from alu_tools import CompanionDashboardView, build_dashboard_embed
-    view = CompanionDashboardView(None, interaction.guild_id, interaction.user.id)
-    # The view needs the cog for persistence and reminders. Resolve it from the bot.
     cog = bot.get_cog("AsphaltToolsCog")
-    view.cog = cog
+    view = CompanionDashboardView(cog, interaction.guild_id, interaction.user.id)
     await interaction.response.send_message(embed=build_dashboard_embed(), view=view, ephemeral=True)
 
 
