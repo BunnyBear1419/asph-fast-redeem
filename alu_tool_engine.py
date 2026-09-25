@@ -71,3 +71,23 @@ def search_tools(query: str, definitions: Mapping[str, Mapping[str, Any]], limit
 
 def tool_is_current_safe(tool_key: str, requires_verified_data: bool = False, verified: bool = False) -> bool:
     return not requires_verified_data or verified
+
+
+def validate_tool_registry(
+    definitions: Mapping[str, Mapping[str, Any]],
+    groups: Mapping[str, set[str]] = TOOL_GROUPS,
+) -> list[str]:
+    """Return registry consistency errors without mutating either registry."""
+    errors: list[str] = []
+    definition_keys = set(definitions)
+    grouped_keys = {key for keys in groups.values() for key in keys}
+    missing_groups = sorted(definition_keys - grouped_keys)
+    unknown_groups = sorted(grouped_keys - definition_keys)
+    if missing_groups:
+        errors.append(f"Uncategorized tools: {', '.join(missing_groups)}")
+    if unknown_groups:
+        errors.append(f"Unknown grouped tools: {', '.join(unknown_groups)}")
+    for category, keys in groups.items():
+        if not keys:
+            errors.append(f"Empty tool group: {category}")
+    return errors
