@@ -16,7 +16,7 @@ from alu_importer import ALUImporter, save_store
 from alu_sources import collect_a9garage_backup_records
 
 
-async def sync_a9garage(output_path: str | None = None, *, persist: bool = false) -> dict:
+async def sync_a9garage(output_path: str | None = None, *, persist: bool = False) -> dict:
     """Inspect A9Garage without redistributing its raw snapshot data."""
     payload = await collect_a9garage_backup_records()
     store = load_default_store()
