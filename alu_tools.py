@@ -74,7 +74,10 @@ class ToolInputModal(discord.ui.Modal):
         if self.cog is not None and self.user_id is not None:
             await self.cog.record_tool_use(self.user_id, self.key)
             await self.cog.persist_tool_state(self.user_id, self.key, values)
-        await interaction.response.send_message(embed=build_tool_result_embed(self.key, values), ephemeral=True)
+            embed = await self.cog.build_personal_result_embed(self.key, values, self.user_id)
+        else:
+            embed = build_tool_result_embed(self.key, values)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 class NotesHubView(discord.ui.View):
     def __init__(self, cog):
@@ -740,6 +743,39 @@ class AsphaltToolsCog(commands.Cog):
         self.redeem_collection = redeem_collection
         self.reminder_loop.start()
 
+    async def build_personal_result_embed(self, key, values, user_id):
+        loop = asyncio.get_event_loop()
+        uid = str(user_id)
+        if key == "redeem" and self.redeem_collection is not None:
+            query = (values.get("Code or search") or "").strip().upper()
+            now = datetime.now(timezone.utc)
+            def find_codes():
+                filt = {"verified": True, "$or": [{"expires_at": {"$exists": False}}, {"expires_at": None}, {"expires_at": {"$gt": now}}]}
+                if query:
+                    filt["code"] = {"$regex": query, "$options": "i"}
+                return list(self.redeem_collection.find(filt).sort("first_seen_at", -1).limit(10))
+            rows = await loop.run_in_executor(None, find_codes)
+            embed = build_tool_result_embed(key, values)
+            embed.description = "\n\n".join(["**" + row.get("code", "UNKNOWN") + "** • source: " + row.get("source", "unknown") + " • verified: yes" for row in rows] or ["No verified active redeem-code records match that search."])
+            return embed
+        if key == "favorites" and self.favorites_collection is not None:
+            favorites = await loop.run_in_executor(None, lambda: list(self.favorites_collection.find({"user_id": uid}).sort("updated_at", -1).limit(15)))
+            recent = await loop.run_in_executor(None, lambda: list(self.usage_collection.find({"user_id": uid}).sort("last_used_at", -1).limit(10))) if self.usage_collection is not None else []
+            embed = build_tool_result_embed(key, values)
+            embed.description = "**Favorites**\n" + ("\n".join("⭐ " + x.get("tool", "") for x in favorites) or "None saved yet.") + "\n\n**Recently used**\n" + ("\n".join("• " + x.get("tool", "") for x in recent) or "No usage history yet.")
+            return embed
+        if key == "settings" and self.settings_collection is not None:
+            rows = await loop.run_in_executor(None, lambda: list(self.settings_collection.find({"user_id": uid}).sort("updated_at", -1).limit(20)))
+            embed = build_tool_result_embed(key, values)
+            embed.description = "**Saved settings**\n" + ("\n".join("⚙️ **" + x.get("setting", "") + "** = `" + x.get("value", "") + "`" for x in rows) or "No saved settings yet.")
+            return embed
+        if key == "garage" and self.garage_collection is not None:
+            rows = await loop.run_in_executor(None, lambda: list(self.garage_collection.find({"user_id": uid}).sort("updated_at", -1).limit(15)))
+            embed = build_tool_result_embed(key, values)
+            if rows:
+                embed.add_field(name="Saved garage snapshots", value="\n".join("🚗 **" + x.get("category", "") + "** — " + str(x.get("current", "?")) + " / " + str(x.get("goal", "?")) for x in rows)[:1024], inline=False)
+            return embed
+        return build_tool_result_embed(key, values)
     async def record_tool_use(self, user_id, key):
         if self.usage_collection is None: return
         now = datetime.now(timezone.utc)
