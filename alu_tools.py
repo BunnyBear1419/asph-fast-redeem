@@ -10,6 +10,7 @@ from alu_upgrade_resolver import ALUUpgradeResolver
 from alu_calculators import number, parse_stats, compare_stats, hunt_estimate, priority_plan, race_model, rating_difference, event_plan, search_summary
 from alu_planners import blueprint_plan, star_up_plan, upgrade_stage_plan, import_parts_plan, rank_progress, garage_progress, event_reward_plan, compare_cars, evo_compare
 from alu_health import audit_data, verification_summary
+from alu_tool_engine import resolve_tool_key, search_tools
 
 ALU_DATA = load_default_store()
 ALU_UPGRADES = ALUUpgradeResolver(ALU_DATA)
@@ -614,6 +615,79 @@ class CompanionActionSelect(discord.ui.Select):
         )
 
 
+class ToolSearchResultSelect(discord.ui.Select):
+    def __init__(self, owner_view, results):
+        self.owner_view = owner_view
+        self.results = results
+        options = [
+            discord.SelectOption(
+                label=result["label"][:100],
+                value=result["key"],
+                emoji=result.get("emoji"),
+                description=result.get("description", "")[:100],
+            )
+            for result in results[:25]
+        ]
+        super().__init__(placeholder="Choose a matching tool…", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        key = resolve_tool_key(self.values[0], TOOL_DEFINITIONS)
+        if not key:
+            await interaction.response.send_message("⚠️ That tool is no longer available.", ephemeral=True)
+            return
+        if key == "faq":
+            await interaction.response.edit_message(embed=build_faq_embed(), view=FAQView(cog=self.owner_view.cog))
+            return
+        if key == "notes":
+            await self.owner_view.cog.show_notes(interaction)
+            return
+        category = next((name for name, data in TOOL_CATEGORIES.items() if key in data["tools"]), "player")
+        self.owner_view.current_category = category
+        await interaction.response.edit_message(
+            embed=build_tool_embed(key),
+            view=ToolActionView(key, category=category, owner_view=self.owner_view),
+        )
+
+
+class ToolSearchView(discord.ui.View):
+    def __init__(self, owner_view, results):
+        super().__init__(timeout=300)
+        self.owner_view = owner_view
+        self.add_item(ToolSearchResultSelect(owner_view, results))
+
+    @discord.ui.button(label="↩️ Back to Dashboard", style=discord.ButtonStyle.secondary, emoji="↩️", row=1)
+    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(embed=build_dashboard_embed(), view=self.owner_view)
+
+
+class ToolSearchModal(discord.ui.Modal, title="🔎 Find an ALU Tool"):
+    query = discord.ui.TextInput(
+        label="Search for a tool",
+        placeholder="Example: upgrade, car search, tracks, redeem, garage…",
+        max_length=100,
+        required=True,
+    )
+
+    def __init__(self, owner_view):
+        super().__init__()
+        self.owner_view = owner_view
+
+    async def on_submit(self, interaction: discord.Interaction):
+        results = search_tools(self.query.value, TOOL_DEFINITIONS, limit=25)
+        if not results:
+            await interaction.response.send_message(
+                "🔎 No matching ALU tools were found. Try a car, track, event, upgrade, garage, redeem, or calculator term.",
+                ephemeral=True,
+            )
+            return
+        embed = discord.Embed(
+            title="🔎 ALU Tool Search",
+            description=f'Found **{len(results)}** matching tool(s) for **{self.query.value.strip()}**. Select one below to open it.',
+            color=TEAL,
+        )
+        await interaction.response.edit_message(embed=embed, view=ToolSearchView(self.owner_view, results))
+
+
 class CompanionDashboardView(discord.ui.View):
     def __init__(self, cog, guild_id: str, user_id: str):
         super().__init__(timeout=900)
@@ -654,7 +728,7 @@ class CompanionDashboardView(discord.ui.View):
     def _refresh_navigation(self):
         # Match the Racing Syndicate League dashboard navigation pattern:
         # one persistent navigation row beneath the section/action selectors.
-        nav_ids = {"companion_back", "companion_home", "companion_refresh", "companion_help", "companion_close"}
+        nav_ids = {"companion_back", "companion_home", "companion_refresh", "companion_help", "companion_search", "companion_close"}
         for item in list(self.children):
             if getattr(item, "custom_id", None) in nav_ids:
                 self.remove_item(item)
@@ -663,6 +737,7 @@ class CompanionDashboardView(discord.ui.View):
         home = discord.ui.Button(label="🏠 Home", style=discord.ButtonStyle.primary, custom_id="companion_home", row=2)
         refresh = discord.ui.Button(label="🔄 Refresh", style=discord.ButtonStyle.secondary, custom_id="companion_refresh", row=2)
         help_button = discord.ui.Button(label="❓ Help", style=discord.ButtonStyle.secondary, custom_id="companion_help", row=2)
+        search_button = discord.ui.Button(label="🔎 Find Tool", style=discord.ButtonStyle.secondary, custom_id="companion_search", row=2)
         close = discord.ui.Button(label="✖ Close", style=discord.ButtonStyle.danger, custom_id="companion_close", row=2)
 
         async def go_back(interaction):
@@ -677,6 +752,9 @@ class CompanionDashboardView(discord.ui.View):
         async def show_help(interaction):
             await interaction.response.edit_message(embed=build_faq_embed(), view=FAQView(cog=self.cog))
 
+        async def find_tool(interaction):
+            await interaction.response.send_modal(ToolSearchModal(self))
+
         async def close_dashboard(interaction):
             self.stop()
             await interaction.response.edit_message(content="🏁 **Shohan's Companion dashboard closed.** Run /dashboard to reopen it.", embed=None, view=None)
@@ -685,11 +763,13 @@ class CompanionDashboardView(discord.ui.View):
         home.callback = go_home
         refresh.callback = do_refresh
         help_button.callback = show_help
+        search_button.callback = find_tool
         close.callback = close_dashboard
         self.add_item(back)
         self.add_item(home)
         self.add_item(refresh)
         self.add_item(help_button)
+        self.add_item(search_button)
         self.add_item(close)
 
     async def show_home(self, interaction: discord.Interaction):
@@ -710,7 +790,7 @@ class CompanionDashboardView(discord.ui.View):
         data = TOOL_CATEGORIES[category]
         embed = discord.Embed(
             title=f'{data["emoji"]} {data["label"].upper()}',
-            description=f'{data["description"]}\n\n**Choose an action below.** Use ↩️ Back anytime to return to the hub.\n\n**Navigation:** ↩️ Back • 🏠 Home • 🔄 Refresh • ❓ Help • ✖ Close',
+            description=f'{data["description"]}\n\n**Choose an action below.** Use ↩️ Back anytime to return to the hub.\n\n**Navigation:** ↩️ Back • 🏠 Home • 🔄 Refresh • ❓ Help • 🔎 Find Tool • ✖ Close',
             color=TEAL,
         )
         await interaction.response.edit_message(embed=embed, view=self)
