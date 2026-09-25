@@ -10,6 +10,7 @@ from alu_data import load_default_store
 from alu_upgrade_resolver import ALUUpgradeResolver
 from alu_calculators import number, parse_stats, compare_stats, hunt_estimate, priority_plan, race_model, rating_difference, event_plan, search_summary
 from alu_planners import blueprint_plan, star_up_plan, upgrade_stage_plan, import_parts_plan, rank_progress, garage_progress, event_reward_plan, compare_cars, evo_compare
+from alu_health import audit_data, verification_summary
 
 ALU_DATA = load_default_store()
 ALU_UPGRADES = ALUUpgradeResolver(ALU_DATA)
@@ -36,6 +37,7 @@ TOOL_DEFINITIONS = {
     "event_rewards": {"label": "Event Reward Planner", "emoji": "🎁", "description": "Estimate reward progress from supplied attempt and reward values.", "fields": ["Event", "Attempts", "Reward per attempt", "Target reward", "Current reward"]},
     "evo": {"label": "EVO / Build Comparison", "emoji": "🧬", "description": "Compare verified EVO profiles without inventing missing values.", "fields": ["Car A", "Car B", "Context"]},
     "car_compare": {"label": "Car Comparison", "emoji": "🏎️", "description": "Compare centralized car records and their provenance.", "fields": ["Car A", "Car B", "Stats A", "Stats B", "Criteria"]},
+    "data_health": {"label": "ALU Data Health", "emoji": "🩺", "description": "Inspect ALU data freshness, provenance, verification, and source-use state.", "fields": ["Report type"]},
 }
 
 TEAL = discord.Color.from_rgb(7, 24, 27)
@@ -398,6 +400,15 @@ def build_tool_result_embed(key, values):
             r=evo_compare(ALU_DATA,values.get("Car A",""),values.get("Car B",""))
             lines.append(f'Status: **{r["status"]}**')
             if r.get("ok"): lines.append(f'Profiles loaded: **{r["a"].id}** vs **{r["b"].id}**')
+        elif key=="data_health":
+            report = audit_data(ALU_DATA)
+            counts = verification_summary(ALU_DATA)
+            lines.append(f'Overall status: **{report["status"]}**')
+            lines.append(f'Sources registered: **{report["source_count"]}**')
+            lines.append(f'Verification: **{", ".join(f"{k}: {v}" for k, v in sorted(counts.items())) or "no records"}**')
+            lines.append(f'Provenance gaps: **{len(report["missing_provenance"])}** • Duplicate IDs: **{sum(len(v) for v in report["duplicate_ids"].values())}**')
+            if report["source_reuse_status"]:
+                lines.append("Source-use state: " + ", ".join(f'**{k}={v}**' for k, v in report["source_reuse_status"].items()))
         elif key=="car_compare":
             r=compare_cars(ALU_DATA,values.get("Car A",""),values.get("Car B",""))
             if not r.get("ok"):
