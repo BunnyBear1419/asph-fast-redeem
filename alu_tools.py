@@ -426,6 +426,37 @@ def build_tool_result_embed(key, values):
             lines.append(f'Provenance gaps: **{len(report["missing_provenance"])}** • Duplicate IDs: **{sum(len(v) for v in report["duplicate_ids"].values())}**')
             if report["source_reuse_status"]:
                 lines.append("Source-use state: " + ", ".join(f'**{k}={v}**' for k, v in report["source_reuse_status"].items()))
+        elif key=="search":
+            kind=(values.get("Search type","cars") or "cars").strip().casefold()
+            kind={"car":"cars","cars":"cars","track":"tracks","tracks":"tracks","event":"events","events":"events"}.get(kind,kind)
+            if kind not in {"cars","tracks","events"}: raise ValueError("Search type must be cars, tracks, or events.")
+            query=values.get("Query","").strip()
+            if not query: raise ValueError("Enter a search query.")
+            rows=search_summary(ALU_DATA,kind,query)
+            if not rows:
+                lines.append("No matching centralized records were found.")
+            else:
+                lines.append(f"Found **{len(rows)}** matching {kind}.")
+                lines.extend("• **" + row["name"] + "** — `" + row["id"] + "` • " + row["verification"] for row in rows[:15])
+        elif key=="redeem":
+            lines.append("Redeem-code records are intentionally shown only when a verified code source is connected.")
+            lines.append("No verified redeem-code records are currently stored in the centralized ALU data layer.")
+            lines.append("This prevents expired, guessed, or unverified codes from being presented as active.")
+        elif key=="garage":
+            progress=_number(values.get("Current progress"))
+            goal=_number(values.get("Goal"))
+            if progress is not None and goal is not None and goal>0:
+                pct=max(0,min(100,(progress/goal)*100))
+                lines.append(f"Progress: **{progress:g} / {goal:g} ({pct:.1f}%)**")
+                lines.append(f"Remaining: **{max(0,goal-progress):g}**")
+            else:
+                lines.append("Snapshot received. Enter numeric Current progress and Goal values to calculate completion.")
+        elif key=="favorites":
+            lines.append("Favorites are designed as a quick-access layer for the dashboard. Selected tool: **" + (values.get("Tool name") or "not specified") + "**.")
+            lines.append("Tool discovery remains centralized so new tools do not require new slash commands.")
+        elif key=="settings":
+            lines.append("Player preference request received.")
+            lines.append("Supported preference areas: language, timezone, default dashboard section, and notification behavior.")
         elif key=="car_compare":
             r=compare_cars(ALU_DATA,values.get("Car A",""),values.get("Car B",""))
             if not r.get("ok"):
