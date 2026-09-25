@@ -160,7 +160,7 @@ def filter_cars(cars: list, *, class_name: str = "", manufacturer: str = "", que
                     str(getattr(car, "name", "")),
                     str(getattr(car, "id", "")),
                     str(getattr(car, "manufacturer", "") or ""),
-                    car_manufacturer(car),
+                    car_manufacturer(car) if car_manufacturer(car) != "Other / Unspecified" else "",
                     str(getattr(car, "class_name", "") or ""),
                 ]
             ).casefold()
