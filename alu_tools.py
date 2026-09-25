@@ -502,6 +502,12 @@ class ToolActionView(discord.ui.View):
         self.key = key
         self.category = category
         self.owner_view = owner_view
+        # CarPickerView uses these values to keep the picker bound to the
+        # player who opened the tool. ToolActionView previously exposed only
+        # owner_view, so the picker raised AttributeError when it checked
+        # owner_view.guild_id / owner_view.user_id.
+        self.guild_id = str(getattr(owner_view, "guild_id", "")) if owner_view is not None else ""
+        self.user_id = str(getattr(owner_view, "user_id", "")) if owner_view is not None else ""
         self.prefill_values = dict(prefill_values or {})
         self._add_car_buttons()
 
