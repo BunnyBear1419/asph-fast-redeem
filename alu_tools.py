@@ -10,6 +10,7 @@ from alu_upgrade_resolver import ALUUpgradeResolver
 from alu_calculators import number, parse_stats, compare_stats, hunt_estimate, priority_plan, race_model, rating_difference, event_plan, search_summary
 from alu_planners import blueprint_plan, star_up_plan, upgrade_stage_plan, import_parts_plan, rank_progress, garage_progress, event_reward_plan, compare_cars, evo_compare
 from alu_health import audit_data, verification_summary
+from alu_car_picker import CarPickerView, car_fields_for_tool
 from alu_tool_engine import resolve_tool_key, search_tools
 
 ALU_DATA = load_default_store()
@@ -49,16 +50,18 @@ TEAL = discord.Color.from_rgb(7, 24, 27)
 
 
 class ToolInputModal(discord.ui.Modal):
-    def __init__(self, key: str, cog=None, user_id=None):
+    def __init__(self, key: str, cog=None, user_id=None, initial_values=None):
         tool = TOOL_DEFINITIONS[key]
         super().__init__(title=tool["label"][:45])
         self.key = key
         self.cog = cog
         self.user_id = str(user_id) if user_id is not None else None
+        self.initial_values = dict(initial_values or {})
         for index, field_name in enumerate(tool["fields"][:5]):
             self.add_item(discord.ui.TextInput(
                 label=field_name[:45],
                 custom_id=f"field_{index}",
+                default=str(self.initial_values.get(field_name, ""))[:500] or None,
                 required=index == 0,
                 max_length=500,
                 style=discord.TextStyle.paragraph if field_name in {"Stats A", "Stats B", "Progress / rank notes"} else discord.TextStyle.short,
@@ -487,24 +490,51 @@ def build_tool_result_embed(key, values):
 
 
 class ToolActionView(discord.ui.View):
-    def __init__(self, key: str, category: str = "garage", owner_view=None):
+    def __init__(self, key: str, category: str = "garage", owner_view=None, prefill_values=None):
         super().__init__(timeout=300)
         self.key = key
         self.category = category
         self.owner_view = owner_view
+        self.prefill_values = dict(prefill_values or {})
+        self._add_car_buttons()
 
-    @discord.ui.button(label="Enter Tool Inputs", style=discord.ButtonStyle.primary, emoji="🧰")
+    def build_embed(self):
+        return build_tool_embed(self.key)
+
+    def _add_car_buttons(self):
+        car_fields = car_fields_for_tool(TOOL_DEFINITIONS[self.key])
+        for index, field_name in enumerate(car_fields[:2]):
+            button = discord.ui.Button(
+                label="Choose Car" if field_name == "Car" else field_name,
+                style=discord.ButtonStyle.secondary,
+                emoji="🚗",
+                row=1,
+            )
+            async def choose(interaction, target=field_name):
+                picker = CarPickerView(self, target, ALU_DATA)
+                await interaction.response.edit_message(embed=picker.embed(), view=picker)
+            button.callback = choose
+            self.add_item(button)
+
+    @discord.ui.button(label="Enter Tool Inputs", style=discord.ButtonStyle.primary, emoji="🧰", row=0)
     async def inputs(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(ToolInputModal(self.key, cog=self.owner_view.cog if self.owner_view else None, user_id=interaction.user.id))
+        await interaction.response.send_modal(
+            ToolInputModal(
+                self.key,
+                cog=self.owner_view.cog if self.owner_view else None,
+                user_id=interaction.user.id,
+                initial_values=self.prefill_values,
+            )
+        )
 
-    @discord.ui.button(label="↩️ Back", style=discord.ButtonStyle.secondary, emoji="↩️")
+    @discord.ui.button(label="Back", style=discord.ButtonStyle.secondary, emoji="↩️", row=2)
     async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.owner_view is not None:
             await self.owner_view.show_category(interaction, self.category)
         else:
             await interaction.response.edit_message(embed=build_dashboard_embed(), view=AsphaltToolsView())
 
-    @discord.ui.button(label="🏠 Home", style=discord.ButtonStyle.primary, emoji="🏠", row=1)
+    @discord.ui.button(label="Home", style=discord.ButtonStyle.primary, emoji="🏠", row=2)
     async def home(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.owner_view is not None:
             await self.owner_view.show_home(interaction)
