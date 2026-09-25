@@ -199,6 +199,61 @@ def build_notes_embed() -> discord.Embed:
     return embed
 
 
+FAQ_CATEGORIES = {
+    "GETTING STARTED": ["What is Asphalt United Companion?", "Do I need an account?", "Is this affiliated with Gameloft?", "Does it work on mobile?", "Is my data private?"],
+    "GARAGE": ["How do I add a car?", "Can I update a car after adding it?", "Why does the garage matter?"],
+    "WALLET": ["What are Credits and Tokens?", "Where do I update my balance?"],
+    "PRIORITY PLANNER": ["What does the Priority tool do?", "How is priority calculated?", "What does the Flow Map show?"],
+    "SEASON CALENDAR": ["How does the Season Calendar work?", "What does a green dot on an event mean?", "Can I filter by event type?"],
+    "CAR INFO": ["What is the Car Info tool?", "Can I compare stock vs max stats?"],
+    "DONATIONS": ["How can I support this project?", "Is donating required to use the site?"],
+}
+
+FAQ_ANSWERS = {"Is donating required to use the site?": "Absolutely not. Everything is free. Donations just help keep the project alive."}
+
+def build_faq_embed(category=None):
+    title = "❓ FAQ" + (f" • {category.title()}" if category else "")
+    embed = discord.Embed(title=title, description="20 questions across 7 topics. Select a topic and then a question to read its answer.", color=TEAL)
+    embed.set_footer(text="🧪 Shohan's Lab  •  🌐 alu.shohanlab.com")
+    return embed
+
+class FAQCategorySelect(discord.ui.Select):
+    def __init__(self):
+        super().__init__(placeholder="Select an FAQ topic...", options=[discord.SelectOption(label=k.title(), value=k) for k in FAQ_CATEGORIES])
+    async def callback(self, interaction):
+        await interaction.response.edit_message(embed=build_faq_embed(self.values[0]), view=FAQQuestionView(self.values[0]))
+
+class FAQQuestionSelect(discord.ui.Select):
+    def __init__(self, category):
+        self.category = category
+        super().__init__(placeholder="Select a question...", options=[discord.SelectOption(label=q[:100], value=q) for q in FAQ_CATEGORIES[category]])
+    async def callback(self, interaction):
+        question = self.values[0]
+        answer = FAQ_ANSWERS.get(question, "The answer text for this FAQ entry was not included in the FAQ content supplied for this implementation.")
+        embed = discord.Embed(title="❓ " + question, description=answer, color=TEAL)
+        embed.add_field(name="Topic", value=self.category.title(), inline=False)
+        embed.set_footer(text="🧪 Shohan's Lab  •  🌐 alu.shohanlab.com")
+        await interaction.response.edit_message(embed=embed, view=FAQQuestionView(self.category))
+
+class FAQQuestionView(discord.ui.View):
+    def __init__(self, category):
+        super().__init__(timeout=300)
+        self.add_item(FAQQuestionSelect(category))
+    @discord.ui.button(label="FAQ Topics", style=discord.ButtonStyle.secondary, emoji="📚", row=1)
+    async def topics(self, interaction, button):
+        await interaction.response.edit_message(embed=build_faq_embed(), view=FAQView())
+    @discord.ui.button(label="Back to Tools", style=discord.ButtonStyle.secondary, emoji="↩️", row=1)
+    async def back(self, interaction, button):
+        await interaction.response.edit_message(embed=build_dashboard_embed(), view=AsphaltToolsView())
+
+class FAQView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=300)
+        self.add_item(FAQCategorySelect())
+    @discord.ui.button(label="Back to Tools", style=discord.ButtonStyle.secondary, emoji="↩️", row=1)
+    async def back(self, interaction, button):
+        await interaction.response.edit_message(embed=build_dashboard_embed(), view=AsphaltToolsView())
+
 class ToolActionView(discord.ui.View):
     def __init__(self, key: str):
         super().__init__(timeout=300)
@@ -239,7 +294,11 @@ class AsphaltToolsSelect(discord.ui.Select):
         super().__init__(placeholder="Select an Asphalt Legends Unite tool...", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.edit_message(embed=build_tool_embed(self.values[0]), view=ToolActionView(self.values[0]))
+        key = self.values[0]
+        if key == "faq":
+            await interaction.response.edit_message(embed=build_faq_embed(), view=FAQView())
+            return
+        await interaction.response.edit_message(embed=build_tool_embed(key), view=ToolActionView(key))
 
 
 class AsphaltToolsView(discord.ui.View):
