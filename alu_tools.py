@@ -691,7 +691,7 @@ class ToolSearchView(discord.ui.View):
             return False
         return True
 
-    @discord.ui.button(label="↩️ Back to Dashboard", style=discord.ButtonStyle.secondary, emoji="↩️", row=1)
+    @discord.ui.button(label="Back to Dashboard", style=discord.ButtonStyle.secondary, emoji="↩️", row=1)
     async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(embed=build_dashboard_embed(), view=self.owner_view)
 
@@ -721,7 +721,7 @@ class ToolSearchModal(discord.ui.Modal, title="🔎 Find an ALU Tool"):
             description=f'Found **{len(results)}** matching tool(s) for **{self.query.value.strip()}**. Select one below to open it.',
             color=TEAL,
         )
-        await interaction.response.edit_message(embed=embed, view=ToolSearchView(self.owner_view, results))
+        await interaction.response.send_message(embed=embed, view=ToolSearchView(self.owner_view, results), ephemeral=True)
 
 
 class CompanionDashboardView(discord.ui.View):
