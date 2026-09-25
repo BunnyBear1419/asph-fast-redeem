@@ -457,6 +457,13 @@ class ToolActionView(discord.ui.View):
         else:
             await interaction.response.edit_message(embed=build_dashboard_embed(), view=AsphaltToolsView())
 
+    @discord.ui.button(label="🏠 Home", style=discord.ButtonStyle.primary, emoji="🏠", row=1)
+    async def home(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.owner_view is not None:
+            await self.owner_view.show_home(interaction)
+        else:
+            await interaction.response.edit_message(embed=build_dashboard_embed(), view=AsphaltToolsView())
+
 
 def build_tool_embed(key: str) -> discord.Embed:
     tool = TOOL_DEFINITIONS[key]
@@ -506,8 +513,8 @@ TOOL_CATEGORIES = {
 
 def build_dashboard_embed() -> discord.Embed:
     embed = discord.Embed(
-        title="🏁 SHOHAN'S COMPANION • ALU PLAYER HUB",
-        description="**Welcome back, driver.** Everything you need is one tap away. Choose a section below — no command memorizing required.",
+        title="🏁 ASPHALT LEGENDS UNITE • PLAYER TOOL DASHBOARD",
+        description="**Welcome back, driver.** This is the main tool hub. Choose a section, then choose the tool you want — no command memorizing required.",
         color=TEAL,
     )
     for category in TOOL_CATEGORIES.values():
@@ -516,7 +523,7 @@ def build_dashboard_embed() -> discord.Embed:
             value=category["description"],
             inline=False,
         )
-    embed.set_footer(text="Shohan's Companion • Select a section to continue")
+    embed.set_footer(text="Shohan's Companion • ALU Tools Hub • Select a section to continue")
     return embed
 
 
@@ -587,7 +594,9 @@ class CompanionDashboardView(discord.ui.View):
         return True
 
     def _refresh_navigation(self):
-        nav_ids = {"companion_back", "companion_home", "companion_refresh", "companion_help"}
+        # Match the Racing Syndicate League dashboard navigation pattern:
+        # one persistent navigation row beneath the section/action selectors.
+        nav_ids = {"companion_back", "companion_home", "companion_refresh", "companion_help", "companion_close"}
         for item in list(self.children):
             if getattr(item, "custom_id", None) in nav_ids:
                 self.remove_item(item)
@@ -596,6 +605,7 @@ class CompanionDashboardView(discord.ui.View):
         home = discord.ui.Button(label="🏠 Home", style=discord.ButtonStyle.primary, custom_id="companion_home", row=2)
         refresh = discord.ui.Button(label="🔄 Refresh", style=discord.ButtonStyle.secondary, custom_id="companion_refresh", row=2)
         help_button = discord.ui.Button(label="❓ Help", style=discord.ButtonStyle.secondary, custom_id="companion_help", row=2)
+        close = discord.ui.Button(label="✖ Close", style=discord.ButtonStyle.danger, custom_id="companion_close", row=2)
 
         async def go_back(interaction):
             await self.show_home(interaction)
@@ -609,14 +619,20 @@ class CompanionDashboardView(discord.ui.View):
         async def show_help(interaction):
             await interaction.response.edit_message(embed=build_faq_embed(), view=FAQView(cog=self.cog))
 
+        async def close_dashboard(interaction):
+            self.stop()
+            await interaction.response.edit_message(content="🏁 **Shohan's Companion dashboard closed.** Run /dashboard to reopen it.", embed=None, view=None)
+
         back.callback = go_back
         home.callback = go_home
         refresh.callback = do_refresh
         help_button.callback = show_help
+        close.callback = close_dashboard
         self.add_item(back)
         self.add_item(home)
         self.add_item(refresh)
         self.add_item(help_button)
+        self.add_item(close)
 
     async def show_home(self, interaction: discord.Interaction):
         self.current_category = None
