@@ -71,6 +71,7 @@ class AsphaltBot(commands.Bot):
             garage_col.create_index([("user_id", 1), ("category", 1)], unique=True)
             favorites_col.create_index([("user_id", 1), ("tool", 1)], unique=True)
             settings_col.create_index([("user_id", 1), ("setting", 1)], unique=True)
+            usage_col.create_index([("user_id", 1), ("tool", 1)], unique=True)
             usage_col.create_index([("user_id", 1), ("last_used_at", -1)])
             redeem_codes_col.create_index("code", unique=True)
             redeem_codes_col.create_index([("verified", 1), ("expires_at", 1)])
