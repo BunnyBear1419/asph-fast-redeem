@@ -98,3 +98,8 @@ All numerical calculations are isolated from the Discord UI in `alu_calculators.
 ### Automated tests
 
 The repository includes unit tests for the centralized data layer, importer, source adapters, upgrade resolver, calculator engine, and planner engine. The GitHub Actions test workflow runs Python compilation followed by `pytest -q` on supported pushes/pull requests/manual dispatches.
+
+
+## Ultimate ALU Tool Scope
+
+The project is strictly dedicated to Asphalt Legends Unite player tools: garage intelligence, resource and blueprint planning, upgrade analysis, event readiness, season/track search, progress tracking, comparisons, goals, and ALU data health/update analysis. It intentionally excludes unrelated general-purpose Discord bot features.
