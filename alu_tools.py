@@ -461,7 +461,7 @@ def build_dashboard_embed() -> discord.Embed:
             "❓ FAQ  •  🚙 Hunt  •  🏎️ Simulation  •  🗺️ Maps\n"
             "🔮 Rating  •  💸 Cost  •  🏁 Events\n"
             "🧩 Blueprints • 🛠️ Upgrade Planner • 🔩 Parts • 📈 Rank • ⭐ Star-Up\n"
-            "🚗 Garage Progress • 🎁 Event Rewards • 🧬 EVO • 🏎️ Car Compare • 📝 Notes"), inline=False)
+            "🚗 Garage Progress • 🎁 Event Rewards • 🧬 EVO • 🏎️ Car Compare • 🩺 Data Health • 📝 Notes"), inline=False)
     embed.set_footer(text="🧪 Shohan's Lab  •  🌐 alu.shohanlab.com")
     return embed
 
