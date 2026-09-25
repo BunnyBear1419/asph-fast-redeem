@@ -63,6 +63,20 @@ class UpgradeStage(DataRecord):
     import_parts: dict[str,int] = field(default_factory=dict)
 
 @dataclass
+class UpgradeCatalog(DataRecord):
+    """Source-native upgrade tables kept intact until their semantics are verified."""
+    source_schema: Optional[str] = None
+    source_version: Optional[int] = None
+    cost_tables: list[Any] = field(default_factory=list)
+    exp_tables: list[Any] = field(default_factory=list)
+    upg_tables: list[Any] = field(default_factory=list)
+    bp_tables: list[Any] = field(default_factory=list)
+    sum_tables: list[Any] = field(default_factory=list)
+    cd_tables: list[Any] = field(default_factory=list)
+    car_table_refs: dict[str,dict[str,int]] = field(default_factory=dict)
+    car_blueprint_requirements: dict[str,list[int]] = field(default_factory=dict)
+
+@dataclass
 class Track(DataRecord):
     name: str = ""
     variant: Optional[str] = None
@@ -86,17 +100,20 @@ class ALUDataRepository(Protocol):
     def get_upgrade_stage(self, car_id: str, star_level: int, stage: int) -> Optional[UpgradeStage]: ...
     def find_tracks(self, query: str = "") -> list[Track]: ...
     def find_events(self, query: str = "") -> list[Event]: ...
+    def get_upgrade_catalog(self, catalog_id: str = "") -> Optional[UpgradeCatalog]: ...
 
 class InMemoryALUDataRepository:
     def __init__(self, *, cars: Iterable[Car]=(), upgrades: Iterable[UpgradeStage]=(),
-                 tracks: Iterable[Track]=(), events: Iterable[Event]=()):
+                 tracks: Iterable[Track]=(), events: Iterable[Event]=(),
+                 upgrade_catalogs: Iterable[UpgradeCatalog]=()):
         self.cars={x.id:x for x in cars}
         self.upgrades={(x.car_id,x.star_level,x.stage):x for x in upgrades}
         self.tracks={x.id:x for x in tracks}
         self.events={x.id:x for x in events}
+        self.upgrade_catalogs={x.id:x for x in upgrade_catalogs}
         self._validate()
     def _validate(self):
-        for collection in (self.cars.values(),self.upgrades.values(),self.tracks.values(),self.events.values()):
+        for collection in (self.cars.values(),self.upgrades.values(),self.tracks.values(),self.events.values(),self.upgrade_catalogs.values()):
             for record in collection: record.validate_provenance()
     def get_car(self, car_id): return self.cars.get(car_id)
     def find_cars(self, query=""):
@@ -113,6 +130,10 @@ class InMemoryALUDataRepository:
         q=query.strip().casefold()
         items=[x for x in self.events.values() if not q or q in x.name.casefold() or q in x.id.casefold()]
         return sorted(items,key=lambda x:x.name.casefold())
+    def get_upgrade_catalog(self, catalog_id=""):
+        if catalog_id:
+            return self.upgrade_catalogs.get(catalog_id)
+        return next(iter(self.upgrade_catalogs.values()), None)
 
 class ALUDataStore:
     def __init__(self, *, sources: Iterable[SourceMetadata]=(), repository: Optional[ALUDataRepository]=None):
@@ -126,10 +147,12 @@ class ALUDataStore:
         repo=self.repository
         return {"sources":len(self.sources),"cars":len(getattr(repo,"cars",{})),
                 "upgrade_stages":len(getattr(repo,"upgrades",{})),
+                "upgrade_catalogs":len(getattr(repo,"upgrade_catalogs",{})),
                 "tracks":len(getattr(repo,"tracks",{})),"events":len(getattr(repo,"events",{}))}
     def car(self, car_id): return self.repository.get_car(car_id)
     def search_cars(self, query=""): return self.repository.find_cars(query)
     def upgrade_stage(self, car_id, star_level, stage): return self.repository.get_upgrade_stage(car_id,star_level,stage)
+    def upgrade_catalog(self, catalog_id=""): return self.repository.get_upgrade_catalog(catalog_id)
     def search_tracks(self, query=""): return self.repository.find_tracks(query)
     def search_events(self, query=""): return self.repository.find_events(query)
     def can_present_as_current(self, record): return record.verification == VerificationStatus.VERIFIED_CURRENT
@@ -139,6 +162,7 @@ class ALUDataStore:
                 "sources":[asdict(s)|{"verification":s.verification.value} for s in self.sources.values()],
                 "cars":[asdict(x)|{"verification":x.verification.value} for x in getattr(repo,"cars",{}).values()],
                 "upgrade_stages":[asdict(x)|{"verification":x.verification.value} for x in getattr(repo,"upgrades",{}).values()],
+                "upgrade_catalogs":[asdict(x)|{"verification":x.verification.value} for x in getattr(repo,"upgrade_catalogs",{}).values()],
                 "tracks":[asdict(x)|{"verification":x.verification.value} for x in getattr(repo,"tracks",{}).values()],
                 "events":[asdict(x)|{"verification":x.verification.value} for x in getattr(repo,"events",{}).values()]}
     @classmethod
@@ -150,6 +174,7 @@ class ALUDataStore:
         repo=InMemoryALUDataRepository(
             cars=(Car(**common(x)) for x in payload.get("cars",[])),
             upgrades=(UpgradeStage(**common(x)) for x in payload.get("upgrade_stages",[])),
+            upgrade_catalogs=(UpgradeCatalog(**common(x)) for x in payload.get("upgrade_catalogs",[])),
             tracks=(Track(**common(x)) for x in payload.get("tracks",[])),
             events=(Event(**common(x)) for x in payload.get("events",[])))
         return cls(sources=sources,repository=repo)
