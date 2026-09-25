@@ -133,3 +133,20 @@ The intended Discord command surface is deliberately small:
 - /tools — compatibility alias for the same dashboard
 
 All other tools are reached through the dashboard UI.
+
+
+## Reliability architecture
+
+The companion is organized around a dashboard-first tool engine, centralized ALU reference data, and separate MongoDB player state. Calculators remain pure input/data functions so they can be regression-tested without Discord or production services.
+
+Reliability safeguards include:
+- deterministic/offline unit tests for calculator and data-layer behavior
+- source adapters that can be tested with mocked responses rather than live network calls
+- explicit verification states and provenance
+- duplicate/conflict detection during imports
+- reference-only handling for sources that are not explicitly redistributable
+- persistent player state isolated from centralized ALU reference data
+- a deliberately small public Discord command surface (/dashboard and /tools)
+- deployment validation that compiles the project and runs the full test suite before attempting production deployment
+
+The project does not treat a successful HTTP fetch as proof that ALU data is current. Current-game values require an appropriate verification state.
