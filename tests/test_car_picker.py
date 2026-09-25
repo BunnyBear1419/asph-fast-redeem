@@ -20,3 +20,23 @@ def test_car_description_stays_within_discord_limit():
 
 def test_discord_picker_page_size_is_25():
     assert CAR_PAGE_SIZE == 25
+
+
+
+def test_reference_catalog_populates_all_five_classes():
+    from alu_data import load_default_store
+
+    store = load_default_store()
+    cars = store.search_cars("")
+    assert len(cars) >= 300
+    assert {car.class_name for car in cars} == {"D", "C", "B", "A", "S"}
+    assert store.source("asphalt_fandom") is not None
+    assert store.source("asphalt_fandom").verification.value == "older_reference"
+
+
+def test_reference_catalog_has_unique_ids_and_names():
+    from alu_data import load_default_store
+
+    cars = load_default_store().search_cars("")
+    assert len({car.id for car in cars}) == len(cars)
+    assert len({car.name.casefold() for car in cars}) == len(cars)
