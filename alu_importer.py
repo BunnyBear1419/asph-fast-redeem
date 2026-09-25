@@ -20,6 +20,7 @@ from alu_data import (
     InMemoryALUDataRepository,
     SourceMetadata,
     Track,
+    UpgradeCatalog,
     UpgradeStage,
     VerificationStatus,
 )
@@ -80,6 +81,24 @@ def normalize_car(raw: Mapping[str, Any], source: SourceMetadata) -> Car:
         max_rank=int(raw["max_rank"]) if raw.get("max_rank") is not None else None,
         stats=stats,
         blueprints=blueprints,
+        **_provenance(raw, source),
+    )
+
+
+def normalize_upgrade_catalog(raw: Mapping[str, Any], source: SourceMetadata) -> UpgradeCatalog:
+    catalog_id = normalize_id(raw.get("id") or f"{source.source_id}-upgrade-catalog", prefix="upgrade-catalog:")
+    return UpgradeCatalog(
+        id=catalog_id,
+        source_schema=str(raw.get("source_schema") or "unknown"),
+        source_version=int(raw["source_version"]) if raw.get("source_version") is not None else None,
+        cost_tables=list(raw.get("cost_tables") or []),
+        exp_tables=list(raw.get("exp_tables") or []),
+        upg_tables=list(raw.get("upg_tables") or []),
+        bp_tables=list(raw.get("bp_tables") or []),
+        sum_tables=list(raw.get("sum_tables") or []),
+        cd_tables=list(raw.get("cd_tables") or []),
+        car_table_refs=dict(raw.get("car_table_refs") or {}),
+        car_blueprint_requirements=dict(raw.get("car_blueprint_requirements") or {}),
         **_provenance(raw, source),
     )
 
@@ -163,6 +182,7 @@ class ALUImporter:
         source_id: str,
         cars: Iterable[Mapping[str, Any]] = (),
         upgrades: Iterable[Mapping[str, Any]] = (),
+        upgrade_catalogs: Iterable[Mapping[str, Any]] = (),
         tracks: Iterable[Mapping[str, Any]] = (),
         events: Iterable[Mapping[str, Any]] = (),
         base: ALUDataStore | None = None,
@@ -175,6 +195,7 @@ class ALUImporter:
         old_repo = old.repository
         car_map = dict(getattr(old_repo, "cars", {}))
         upgrade_map = dict(getattr(old_repo, "upgrades", {}))
+        catalog_map = dict(getattr(old_repo, "upgrade_catalogs", {}))
         track_map = dict(getattr(old_repo, "tracks", {}))
         event_map = dict(getattr(old_repo, "events", {}))
 
@@ -201,6 +222,9 @@ class ALUImporter:
         for raw in upgrades:
             record = normalize_upgrade(raw, source)
             merge(upgrade_map, (record.car_id, record.star_level, record.stage), record, "upgrade")
+        for raw in upgrade_catalogs:
+            record = normalize_upgrade_catalog(raw, source)
+            merge(catalog_map, record.id, record, "upgrade_catalog")
         for raw in tracks:
             record = normalize_track(raw, source)
             merge(track_map, record.id, record, "track")
@@ -213,6 +237,7 @@ class ALUImporter:
             repository=InMemoryALUDataRepository(
                 cars=car_map.values(),
                 upgrades=upgrade_map.values(),
+                upgrade_catalogs=catalog_map.values(),
                 tracks=track_map.values(),
                 events=event_map.values(),
             ),
