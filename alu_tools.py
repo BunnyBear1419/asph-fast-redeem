@@ -874,7 +874,7 @@ class AsphaltToolsCog(commands.Cog):
         self.reminder_loop.start()
 
     async def build_personal_result_embed(self, key, values, user_id):
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         uid = str(user_id)
         if key == "redeem" and self.redeem_collection is not None:
             query = (values.get("Code or search") or "").strip().upper()
@@ -909,10 +909,10 @@ class AsphaltToolsCog(commands.Cog):
     async def record_tool_use(self, user_id, key):
         if self.usage_collection is None: return
         now = datetime.now(timezone.utc)
-        await asyncio.get_event_loop().run_in_executor(None, lambda: self.usage_collection.update_one({"user_id": str(user_id), "tool": key}, {"$set": {"last_used_at": now}, "$inc": {"use_count": 1}}, upsert=True))
+        await asyncio.get_running_loop().run_in_executor(None, lambda: self.usage_collection.update_one({"user_id": str(user_id), "tool": key}, {"$set": {"last_used_at": now}, "$inc": {"use_count": 1}}, upsert=True))
 
     async def persist_tool_state(self, user_id, key, values):
-        loop = asyncio.get_event_loop(); uid = str(user_id); now = datetime.now(timezone.utc)
+        loop = asyncio.get_running_loop(); uid = str(user_id); now = datetime.now(timezone.utc)
         if key == "favorites" and self.favorites_collection is not None:
             name = (values.get("Tool name") or "").strip()
             if name: await loop.run_in_executor(None, lambda: self.favorites_collection.update_one({"user_id": uid, "tool": name}, {"$set": {"updated_at": now}}, upsert=True))
@@ -924,11 +924,11 @@ class AsphaltToolsCog(commands.Cog):
             await loop.run_in_executor(None, lambda: self.garage_collection.update_one({"user_id":uid,"category":doc["category"]},{"$set":doc},upsert=True))
 
     async def insert_note(self, doc):
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, lambda: self.notes_collection.insert_one(doc))
 
     async def show_notes(self, interaction: discord.Interaction):
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         user_id = str(interaction.user.id)
         notes = await loop.run_in_executor(
             None,
@@ -947,7 +947,7 @@ class AsphaltToolsCog(commands.Cog):
         await interaction.response.edit_message(embed=embed, view=view)
 
     async def delete_note(self, user_id, note_id):
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         try:
             object_id = ObjectId(note_id)
         except Exception:
@@ -961,7 +961,7 @@ class AsphaltToolsCog(commands.Cog):
     @tasks.loop(seconds=30)
     async def reminder_loop(self):
         now = datetime.now(timezone.utc)
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         reminders = await loop.run_in_executor(
             None,
             lambda: list(self.notes_collection.find({
@@ -976,20 +976,25 @@ class AsphaltToolsCog(commands.Cog):
                     user = await self.bot.fetch_user(int(note["user_id"]))
                 except Exception:
                     user = None
+            delivered = False
             if user is not None:
                 try:
                     await user.send(
                         f"Shohan's Companion Reminder\n\n"
                         f"{note.get('title', 'Reminder')}\n{note.get('note', '')}"
                     )
+                    delivered = True
                 except (discord.Forbidden, discord.HTTPException):
-                    pass
-            await loop.run_in_executor(
-                None,
-                lambda note_id=note["_id"]: self.notes_collection.update_one(
-                    {"_id": note_id}, {"$set": {"notified": True, "notified_at": now}}
-                ),
-            )
+                    delivered = False
+
+            if delivered:
+                await loop.run_in_executor(
+                    None,
+                    lambda note_id=note["_id"]: self.notes_collection.update_one(
+                        {"_id": note_id, "notified": {"$ne": True}},
+                        {"$set": {"notified": True, "notified_at": now}},
+                    ),
+                )
 
     @reminder_loop.before_loop
     async def before_reminder_loop(self):
