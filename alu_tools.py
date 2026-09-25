@@ -2,7 +2,6 @@ import asyncio
 from datetime import datetime, timezone
 
 import discord
-from discord import app_commands
 from discord.ext import commands, tasks
 from bson import ObjectId
 
@@ -94,7 +93,10 @@ class NotesHubView(discord.ui.View):
 
     @discord.ui.button(label="Back to Tools", style=discord.ButtonStyle.secondary, emoji="↩️")
     async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.edit_message(embed=build_dashboard_embed(), view=AsphaltToolsView())
+        await interaction.response.edit_message(
+            embed=build_dashboard_embed(),
+            view=CompanionDashboardView(self.cog, interaction.guild_id, interaction.user.id),
+        )
 
 
 class NoteModal(discord.ui.Modal):
