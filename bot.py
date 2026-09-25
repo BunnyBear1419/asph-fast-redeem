@@ -57,6 +57,7 @@ USER_AGENTS = [
 
 MONGO_URI = os.environ.get("MONGO_URI")
 MONGO_DB_NAME = os.environ.get("MONGO_DB_NAME", "myDiscordBot")
+PROJECT_NAME = "Shohan's Companion"
 
 if not MONGO_URI:
     raise ValueError("❌ CRITICAL ERROR: The 'MONGO_URI' variable is missing from Discloud Environment Variables!")
@@ -90,7 +91,7 @@ bot = AsphaltBot()
 async def on_ready():
     print(f"==========================================")
     print(f"✅ MongoDB cluster linked safely: {bot.user.name}")
-    print(f"🤖 Bot application logged in as: {bot.user}")
+    print(f"🤖 {PROJECT_NAME} logged in as: {bot.user}")
     print(f"🛡️ Infrastructure systems running optimally.")
     print(f"==========================================")
     
@@ -684,7 +685,7 @@ async def admin_embed_builder_slash(interaction: discord.Interaction, element: a
     
     await interaction.followup.send(f"🎯 Brand Visual Success: The custom {element.name} asset has been cached and loaded into automated drop templates.", ephemeral=True)
 
-@bot.tree.command(name="identity", description="👤 Owner Tool: Dynamically rebrand the bot name and avatar via a single interactive interface option.")
+@bot.tree.command(name="identity", description="👤 Owner Tool: Rebrand Shohan's Companion name and avatar.")
 @app_commands.describe(new_name="The updated display name for the bot application.", avatar_file="The graphic file asset to register as the bot's new profile picture.")
 @commands.is_owner()
 async def identity_slash(interaction: discord.Interaction, new_name: str, avatar_file: discord.Attachment):
