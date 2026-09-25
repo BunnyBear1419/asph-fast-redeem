@@ -163,15 +163,16 @@ def _a9_upgrade_catalog(payload: Mapping[str, Any], *, collected_at: str) -> dic
         "notes": "Indexed A9Garage upgrade/cost/XP/blueprint tables preserved verbatim; semantics are not independently verified.",
     }
 
-def _a9_evo_profiles(payload: Mapping[str, Any], *, collected_at: str) -> list[dict[str, Any]]:
+def _a9_evo_profiles(payload: Mapping[str, Any], *, collected_at: str, car_name_to_id: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
     profiles = []
+    car_name_to_id = car_name_to_id or {}
     for name, row in (payload.get("evo_data") or {}).items():
         if not isinstance(row, Mapping):
             continue
         info = row.get("info") or {}
         profiles.append({
             "id": f"evo:{name}",
-            "car_id": f"car:{str(info.get('name') or name)}",
+            "car_id": str(car_name_to_id.get(str(info.get("name") or name).strip().casefold()) or f"car:{str(info.get('name') or name)}"),
             "star_levels": int(info.get("stars") or 0),
             "class_name": info.get("class"),
             "blueprint_requirements": [int(x) for x in (info.get("bp") or []) if isinstance(x, (int, float))],
@@ -197,18 +198,17 @@ async def collect_a9garage_backup_records() -> dict[str, Any]:
     )
 
     upgrade_catalog = _a9_upgrade_catalog(cars_payload, collected_at=collected_at)
-    evo_profiles = _a9_evo_profiles(evo_payload, collected_at=collected_at)
+    car_name_to_id = {
+        str(row[2]).strip().casefold(): f"car:{row[0]}"
+        for row in cars_payload.get("cars", [])
+        if isinstance(row, list) and len(row) > 2
+    }
+    evo_profiles = _a9_evo_profiles(evo_payload, collected_at=collected_at, car_name_to_id=car_name_to_id)
     cars = [
         _a9_car_record(row, collected_at=collected_at)
         for row in cars_payload.get("cars", [])
         if isinstance(row, list)
     ]
-    car_name_to_id = {
-        str(row[2]).strip().casefold(): row[0]
-        for row in cars_payload.get("cars", [])
-        if isinstance(row, list) and len(row) > 2
-    }
-
     tracks = []
     for row in tracks_payload.get("tracks", []):
         if not isinstance(row, Mapping) or not row.get("name"):
