@@ -16,4 +16,22 @@ It includes the Fast Redeem system plus the Asphalt Legends Unite Tools Hub for:
 - Event Calculator
 - Notes & Reminders
 
-The bot is designed to keep these tools accessible directly inside Discord.
+## ALU data layer
+
+ALU game data is centralized in alu_data.py. Tools should query this layer rather than hard-code game values.
+
+Each imported record carries:
+- source and source URL
+- collection date
+- game/version context
+- verification status (verified_current, older_reference, or unknown)
+
+The repository currently contains source metadata and an intentionally empty data store. No numeric car, upgrade, blueprint, track, or event values are presented as current until they are imported and verified.
+
+Reference sources currently registered:
+- A9Garage
+- Asphalt Legends Unite Database
+- Asphalt9.info (older/reference upgrade data)
+- Gameloft documentation
+
+This structure keeps the data source replaceable: a future MongoDB or refreshed import can replace the repository without requiring a rewrite of the Discord UI/calculators.
