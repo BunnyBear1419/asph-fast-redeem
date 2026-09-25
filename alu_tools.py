@@ -7,17 +7,17 @@ from discord.ext import commands, tasks
 from bson import ObjectId
 
 TOOL_DEFINITIONS = {
-    "upgrades": {"label": "Car Upgrades Calculator", "emoji": "🔧", "description": "Plan upgrade paths and compare target configurations.", "fields": ["Car", "Current star", "Target star", "Current upgrades"]},
-    "comparator": {"label": "Comparator", "emoji": "📊", "description": "Compare two cars or configurations side by side.", "fields": ["Car A", "Car B", "Comparison criteria"]},
-    "priority": {"label": "Priority", "emoji": "🏆", "description": "Organize upgrade and garage priorities.", "fields": ["Car", "Goal", "Priority", "Notes"]},
-    "calendar": {"label": "Season Calendar", "emoji": "📅", "description": "View season, event, and calendar information.", "fields": ["Season or event", "Date range"]},
+    "upgrades": {"label": "Car Upgrades Calculator", "emoji": "🔧", "description": "Plan an upgrade path from your current configuration to a target.", "fields": ["Car", "Current star", "Target star", "Current rank", "Target rank"]},
+    "comparator": {"label": "Comparator", "emoji": "📊", "description": "Compare two cars or user-supplied configurations side by side.", "fields": ["Car A", "Car B", "Stats A", "Stats B", "Comparison criteria"]},
+    "priority": {"label": "Priority", "emoji": "🏆", "description": "Organize active events and upgrade goals by the information you provide.", "fields": ["Car / Event", "Goal", "Days left", "Reward", "Progress / rank notes"]},
+    "calendar": {"label": "Season Calendar", "emoji": "📅", "description": "Browse season and event information once verified event dates are connected.", "fields": ["Season or event", "Start date", "End date", "Event type", "Filter"]},
     "faq": {"label": "FAQ", "emoji": "❓", "description": "Find answers to frequently asked questions.", "fields": ["Question or topic"]},
-    "hunt": {"label": "Hunt Game", "emoji": "🚙", "description": "Estimate races needed for a card or blueprint goal.", "fields": ["Car / hunt", "Current cards", "Target cards", "Drop rate"]},
-    "simulation": {"label": "Simulation", "emoji": "🏎️", "description": "Run matchup simulations when verified car data is available.", "fields": ["Car A", "Car B", "Races"]},
-    "maps": {"label": "Race Maps", "emoji": "🗺️", "description": "Browse race maps and track variants.", "fields": ["Map or track"]},
-    "rating": {"label": "Rating Predictor", "emoji": "🔮", "description": "Analyze a Gauntlet rating against verified reference data.", "fields": ["Gauntlet rating", "Season / context"]},
-    "cost": {"label": "Cost Calculator", "emoji": "💸", "description": "Calculate upgrade costs once verified game cost data is connected.", "fields": ["Car", "Current star", "Target star"]},
-    "events": {"label": "Event Calculator", "emoji": "🏁", "description": "Plan event stages, attempts, rewards, and targets.", "fields": ["Event", "Stage", "Target reward"]},
+    "hunt": {"label": "Hunt Game", "emoji": "🚙", "description": "Estimate attempts needed for a card or blueprint goal using your supplied drop rate.", "fields": ["Car / hunt", "Current cards", "Target cards", "Drop rate"]},
+    "simulation": {"label": "Simulation", "emoji": "🏎️", "description": "Prepare race simulations from supplied matchup inputs.", "fields": ["Car A", "Car B", "Track", "Races"]},
+    "maps": {"label": "Race Maps", "emoji": "🗺️", "description": "Search and organize race maps and track variants.", "fields": ["Map or track", "Variant", "Direction"]},
+    "rating": {"label": "Rating Predictor", "emoji": "🔮", "description": "Analyze a supplied Gauntlet rating against verified reference data.", "fields": ["Gauntlet rating", "Season / context", "Reference rating", "Sample size"]},
+    "cost": {"label": "Cost Calculator", "emoji": "💸", "description": "Calculate upgrade costs when verified game cost data is available.", "fields": ["Car", "Current star", "Target star", "Current rank", "Target rank"]},
+    "events": {"label": "Event Calculator", "emoji": "🏁", "description": "Plan event stages, attempts, rewards, and targets.", "fields": ["Event", "Stage", "Attempts available", "Target reward", "Current progress"]},
     "notes": {"label": "Notes & Reminders", "emoji": "📝", "description": "Create private notes and reminder entries.", "fields": ["Title", "Note", "Reminder"]},
 }
 
@@ -35,24 +35,17 @@ class ToolInputModal(discord.ui.Modal):
                 custom_id=f"field_{index}",
                 required=index == 0,
                 max_length=500,
-                style=discord.TextStyle.paragraph if field_name in {"Notes", "Question or topic", "Map or track"} else discord.TextStyle.short,
+                style=discord.TextStyle.paragraph if field_name in {"Stats A", "Stats B", "Progress / rank notes"} else discord.TextStyle.short,
             ))
 
     async def on_submit(self, interaction: discord.Interaction):
         tool = TOOL_DEFINITIONS[self.key]
-        values = []
-        for item in self.children:
+        values = {}
+        for index, item in enumerate(self.children):
             value = getattr(item, "value", "").strip()
             if value:
-                values.append(f"**{item.label}:** {value}")
-        embed = discord.Embed(
-            title=f'{tool["emoji"]} {tool["label"]}',
-            description=("Your inputs were received and the tool interface is ready.\n\n" + "\n".join(values) +
-                         "\n\n⚠️ **Data status:** This repository does not currently contain a verified Asphalt Legends Unite data set for numerical results. No game values are being invented. The calculation/data engine can be connected separately when verified data is available."),
-            color=TEAL,
-        )
-        embed.set_footer(text="🧪 Shohan's Lab  •  🌐 alu.shohanlab.com")
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+                values[tool["fields"][index]] = value
+        await interaction.response.send_message(embed=build_tool_result_embed(self.key, values), ephemeral=True)
 
 class NotesHubView(discord.ui.View):
     def __init__(self, cog):
@@ -253,6 +246,73 @@ class FAQView(discord.ui.View):
     @discord.ui.button(label="Back to Tools", style=discord.ButtonStyle.secondary, emoji="↩️", row=1)
     async def back(self, interaction, button):
         await interaction.response.edit_message(embed=build_dashboard_embed(), view=AsphaltToolsView())
+
+def _number(value):
+    try:
+        return float(str(value).replace(",", "").replace("%", "").strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def build_tool_result_embed(key, values):
+    tool = TOOL_DEFINITIONS[key]
+    embed = discord.Embed(title=f'{tool["emoji"]} {tool["label"]} — Result', color=TEAL)
+    lines = []
+    if key == "upgrades":
+        current = _number(values.get("Current rank"))
+        target = _number(values.get("Target rank"))
+        if current is not None and target is not None:
+            lines.append(f"Requested rank change: **{target-current:+g}**")
+        lines.append("Upgrade path captured. Exact parts, ranks, Credits, and Tokens require verified ALU upgrade data.")
+    elif key == "comparator":
+        lines.append(f"**{values.get('Car A','Car A')}** vs **{values.get('Car B','Car B')}**")
+        lines.append("User-supplied stats are preserved for comparison. Missing game stats are never invented.")
+    elif key == "priority":
+        days = _number(values.get("Days left"))
+        lines.append(f"Days remaining: **{days:g}**" if days is not None else "Add days remaining to support urgency calculations.")
+        lines.append("Priority factors: time remaining, reward, progress, and rank readiness.")
+    elif key == "calendar":
+        lines.append("Season/event request captured.")
+        lines.append("Exact event dates require a verified season calendar data source.")
+    elif key == "hunt":
+        current, target, drop = map(_number, [values.get("Current cards"), values.get("Target cards"), values.get("Drop rate")])
+        if current is not None and target is not None and drop is not None and drop > 0:
+            missing=max(0,target-current)
+            lines += [f"Cards needed: **{missing:g}**", f"Expected attempts at {drop:g}%: **{missing/(drop/100):.1f}**"]
+        else:
+            lines.append("Enter current cards, target cards, and drop rate (%) for an estimate.")
+    elif key == "simulation":
+        races=_number(values.get("Races"))
+        lines.append(f"Races requested: **{races:g}**" if races is not None else "Enter a race count.")
+        lines.append("Game-accurate outcomes require verified car, track, and performance data.")
+    elif key == "maps":
+        lines.append(f"Map: **{values.get('Map or track','—')}**")
+        lines.append(f"Variant: **{values.get('Variant','—')}**")
+    elif key == "rating":
+        rating=_number(values.get("Gauntlet rating"))
+        reference=_number(values.get("Reference rating"))
+        if rating is not None and reference is not None:
+            lines.append(f"Rating difference from supplied reference: **{rating-reference:+g}**")
+        else:
+            lines.append("Supply a rating and reference value for a factual comparison.")
+        lines.append("No future rating outcome is guessed without verified historical data.")
+    elif key == "cost":
+        lines.append("Cost request captured.")
+        lines.append("Exact upgrade costs require verified ALU cost tables.")
+    elif key == "events":
+        attempts=_number(values.get("Attempts available"))
+        progress=_number(values.get("Current progress"))
+        if attempts is not None: lines.append(f"Attempts available: **{attempts:g}**")
+        if progress is not None: lines.append(f"Current progress: **{progress:g}**")
+        lines.append("Exact reward/stage calculations require verified event data.")
+    else:
+        lines.append("Inputs received.")
+    embed.description="\n\n".join(lines)
+    if values:
+        embed.add_field(name="Inputs", value="\n".join(f"**{k}:** {v}" for k,v in values.items())[:1024], inline=False)
+    embed.set_footer(text="🧪 Shohan's Lab  •  🌐 alu.shohanlab.com")
+    return embed
+
 
 class ToolActionView(discord.ui.View):
     def __init__(self, key: str):
