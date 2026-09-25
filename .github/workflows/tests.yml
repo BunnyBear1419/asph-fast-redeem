@@ -18,6 +18,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      PYTHONPATH: .
     steps:
       - name: Checkout
         uses: actions/checkout@v4.2.2
@@ -34,4 +36,4 @@ jobs:
         run: python -m compileall -q .
 
       - name: Run test suite
-        run: pytest -q
+        run: python -m pytest -q
