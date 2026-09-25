@@ -37,7 +37,12 @@ TOOL_DEFINITIONS = {
     "event_rewards": {"label": "Event Reward Planner", "emoji": "🎁", "description": "Estimate reward progress from supplied attempt and reward values.", "fields": ["Event", "Attempts", "Reward per attempt", "Target reward", "Current reward"]},
     "evo": {"label": "EVO / Build Comparison", "emoji": "🧬", "description": "Compare verified EVO profiles without inventing missing values.", "fields": ["Car A", "Car B", "Context"]},
     "car_compare": {"label": "Car Comparison", "emoji": "🏎️", "description": "Compare centralized car records and their provenance.", "fields": ["Car A", "Car B", "Stats A", "Stats B", "Criteria"]},
-    "data_health": {"label": "ALU Data Health", "emoji": "🩺", "description": "Inspect ALU data freshness, provenance, verification, and source-use state.", "fields": ["Report type"]},
+    "data_health": {"label": "ALU Data Health", "emoji": "🩺", "description": "Inspect ALU data freshness, provenance, verification, and source-use state.", "fields": ["Report type"]},,
+    "search": {"label": "Global ALU Search", "emoji": "🔎", "description": "Search centralized cars, tracks, or events without leaving the dashboard.", "fields": ["Search type", "Query"]},
+    "garage": {"label": "My Garage Snapshot", "emoji": "🚗", "description": "Analyze your current garage progress using values you provide.", "fields": ["Car / category", "Current progress", "Goal", "Notes"]},
+    "redeem": {"label": "Redeem Center", "emoji": "🎁", "description": "Verified ALU redeem-code information when code records are available.", "fields": ["Code or search"]},
+    "favorites": {"label": "Favorites & Recent Tools", "emoji": "⭐", "description": "Quick-access hub for your most-used tools.", "fields": ["Tool name"]},
+    "settings": {"label": "Player Settings", "emoji": "⚙️", "description": "Configure companion preferences and notification behavior.", "fields": ["Setting", "Value"]},
 }
 
 TEAL = discord.Color.from_rgb(7, 24, 27)
@@ -502,11 +507,23 @@ TOOL_CATEGORIES = {
         "description": "Race maps, ALU reference information and frequently asked questions.",
         "tools": ["maps", "faq"],
     },
+    "player": {
+        "label": "Player Hub",
+        "emoji": "👤",
+        "description": "Garage snapshot, favorites, settings, and fast ALU search.",
+        "tools": ["garage", "favorites", "search", "settings"],
+    },
+    "redeem": {
+        "label": "Redeem Center",
+        "emoji": "🎁",
+        "description": "Verified redeem-code information with an explicit data-status safeguard.",
+        "tools": ["redeem"],
+    },
     "progress": {
         "label": "Progress & Data",
         "emoji": "📊",
-        "description": "Personal notes plus centralized ALU data health and provenance.",
-        "tools": ["data_health", "notes"],
+        "description": "Personal notes, garage progress, and centralized ALU data health/provenance.",
+        "tools": ["data_health", "notes", "garage_progress"],
     },
 }
 
