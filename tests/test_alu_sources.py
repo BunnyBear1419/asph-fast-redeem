@@ -4,7 +4,10 @@ from alu_sources import collect_a9garage_index, SourceFetchError
 
 
 @pytest.mark.asyncio
-async def test_a9garage_index_collection():
+async def test_a9garage_index_collection(monkeypatch):
+    async def fake_fetch_text(url):
+        return "<html><head><title>A9Garage Test</title></head><body></body></html>"
+    monkeypatch.setattr("alu_sources.fetch_text", fake_fetch_text)
     result = await collect_a9garage_index()
     assert result["source_id"] == "a9garage"
     assert "cars" in result
