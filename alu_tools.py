@@ -499,7 +499,19 @@ class ToolActionView(discord.ui.View):
         self._add_car_buttons()
 
     def build_embed(self):
-        return build_tool_embed(self.key)
+        embed = build_tool_embed(self.key)
+        selected = [
+            f"**{field}:** {value}"
+            for field, value in self.prefill_values.items()
+            if value
+        ]
+        if selected:
+            embed.add_field(
+                name="🚗 Selected Car(s)",
+                value="\n".join(selected)[:1024],
+                inline=False,
+            )
+        return embed
 
     def _add_car_buttons(self):
         car_fields = car_fields_for_tool(TOOL_DEFINITIONS[self.key])
