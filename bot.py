@@ -10,6 +10,7 @@ import aiohttp
 import discord
 from discord import app_commands
 from discord.ext import tasks, commands
+from alu_tools import setup_alu_tools
 import pymongo
 from pymongo import MongoClient, DESCENDING
 from bs4 import BeautifulSoup
@@ -79,7 +80,9 @@ class AsphaltBot(commands.Bot):
     async def setup_hook(self):
         if not auto_code_scraper_loop.is_running():
             auto_code_scraper_loop.start()
+        await setup_alu_tools(self)
         print("🟢 Background Scraping Engine successfully initialized.")
+        print("🛠️ Asphalt Legends Unite Tools Hub registered.")
 
 bot = AsphaltBot()
 
