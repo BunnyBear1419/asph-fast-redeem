@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "exported_at": "2026-09-24",
+  "sources": [
+    {"source_id":"a9garage","name":"A9Garage","url":"https://a9garage.pages.dev/","collected_at":"2026-09-24","verification":"unknown","game_version":null,"notes":"ALU-oriented database reference."},
+    {"source_id":"alu_database","name":"Asphalt Legends Unite Database","url":"https://asphaltlegendsunite.info/","collected_at":"2026-09-24","verification":"unknown","game_version":null,"notes":"Car, event, race, track, performance and blueprint reference."},
+    {"source_id":"asphalt9_info","name":"Asphalt9.info upgrade database","url":"https://asphalt9.info/asphalt9/tuning/upgrades/","collected_at":"2026-09-24","verification":"older_reference","game_version":null,"notes":"Reference only until ALU accuracy is verified."},
+    {"source_id":"gameloft_docs","name":"Gameloft documentation","url":"https://support.gameloft.com/","collected_at":"2026-09-24","verification":"unknown","game_version":null,"notes":"Official documentation reference for upgrade-system concepts."}
+  ],
+  "cars": [], "upgrade_stages": [], "tracks": [], "events": []
+}
