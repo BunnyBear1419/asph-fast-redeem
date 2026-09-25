@@ -48,4 +48,20 @@ The importer:
 - records conflicts instead of silently overwriting them
 - exports the resulting store back to the replaceable JSON dataset
 
-A structured A9Garage snapshot adapter is now available. It preserves the source-native upgrade tables (cost, XP, upgrade/import-part, blueprint, summary, and combined-cost tables) in an UpgradeCatalog, plus the per-car table references and blueprint requirement strings exposed by api_cars.json.\n\nThese third-party snapshot values remain unknown verification. The sync layer does not reinterpret an indexed table into a game meaning unless that mapping is established by source evidence. This prevents a calculator from silently using a guessed cost/part mapping as if it were verified current data.\n\nRun the central sync with:\npython alu_sync.py\n\nThe resulting store can then be replaced or refreshed from MongoDB or another repository implementation without changing the Discord/UI tools.
+A structured A9Garage snapshot adapter is now available. It preserves the source-native upgrade tables (cost, XP, upgrade/import-part, blueprint, summary, and combined-cost tables) in an UpgradeCatalog, plus the per-car table references and blueprint requirement strings exposed by api_cars.json.
+
+These third-party snapshot values remain unknown verification. The sync layer does not reinterpret an indexed table into a game meaning unless that mapping is established by source evidence. This prevents a calculator from silently using a guessed cost/part mapping as if it were verified current data.
+
+Run the central sync with:
+python alu_sync.py
+
+The resulting store can then be replaced or refreshed from MongoDB or another repository implementation without changing the Discord/UI tools.
+
+
+### Third-party source reuse policy
+
+A9Garage is currently treated as a **reference-only** source. The public A9Garage backup repository does not declare an explicit software/data license, so this project does not persist or redistribute its raw snapshot datasets by default.
+
+The A9Garage adapter may inspect the public snapshot for research, validation, and provenance-aware development, but `alu_sync.py` intentionally operates in non-persisting reference mode. Persistence is refused unless the source metadata explicitly identifies the source as `redistributable`.
+
+This is a practical engineering safeguard, not a legal determination. Obtain permission or confirm applicable licensing before redistributing third-party datasets.
