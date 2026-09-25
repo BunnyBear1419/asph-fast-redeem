@@ -51,7 +51,7 @@ def test_reference_catalog_has_unique_ids_and_names():
 
 def test_hierarchical_picker_groups_cars_by_class_and_manufacturer():
     cars = [
-        SimpleNamespace(id="1", name="Jesko", manufacturer=None, class_name="S"),
+        SimpleNamespace(id="1", name="Koenigsegg Jesko", manufacturer=None, class_name="S"),
         SimpleNamespace(id="2", name="Jesko Absolut", manufacturer="Koenigsegg", class_name="S"),
         SimpleNamespace(id="3", name="Camaro LT", manufacturer=None, class_name="D"),
     ]
