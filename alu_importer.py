@@ -56,7 +56,7 @@ def _provenance(raw: Mapping[str, Any], source: SourceMetadata) -> dict[str, Any
     collected_at = str(raw.get("collected_at") or source.collected_at or utc_now())
     return {
         "source": source.source_id,
-        "source_url": source.url,
+        "source_url": raw.get("source_url") or source.url,
         "collected_at": collected_at,
         "game_version": raw.get("game_version") or source.game_version,
         "verification": _verification(raw.get("verification", source.verification)),
