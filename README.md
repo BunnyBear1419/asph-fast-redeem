@@ -65,3 +65,36 @@ A9Garage is currently treated as a **reference-only** source. The public A9Garag
 The A9Garage adapter may inspect the public snapshot for research, validation, and provenance-aware development, but `alu_sync.py` intentionally operates in non-persisting reference mode. Persistence is refused unless the source metadata explicitly identifies the source as `redistributable`.
 
 This is a practical engineering safeguard, not a legal determination. Obtain permission or confirm applicable licensing before redistributing third-party datasets.
+
+
+## Tooling status
+
+The Discord dashboard now includes the complete planning/tool surface:
+
+- Car Upgrades Calculator
+- Upgrade Planner
+- Cost Calculator
+- Blueprint Planner
+- Star-Up Planner
+- Import Parts Planner
+- Rank Calculator
+- Garage Progress Tracker
+- Car Comparator
+- Car Comparison
+- EVO / Build Comparison
+- Priority Planner
+- Season Calendar lookup
+- Event Calculator
+- Event Reward Planner
+- Hunt Game
+- Input-only Simulation
+- Race Maps / Track lookup
+- Rating Difference analysis
+- FAQ
+- Notes & Reminders
+
+All numerical calculations are isolated from the Discord UI in `alu_calculators.py` and `alu_planners.py`. Game values are only presented as current when centralized records are marked `verified_current`; otherwise the tools explain the data state instead of inventing values.
+
+### Automated tests
+
+The repository includes unit tests for the centralized data layer, importer, source adapters, upgrade resolver, calculator engine, and planner engine. The GitHub Actions test workflow runs Python compilation followed by `pytest -q` on supported pushes/pull requests/manual dispatches.
