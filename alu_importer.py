@@ -35,6 +35,8 @@ def utc_now() -> str:
 
 def normalize_id(value: Any, *, prefix: str = "") -> str:
     text = str(value or "").strip().casefold()
+    if prefix and text.startswith(prefix):
+        text = text[len(prefix):]
     text = re.sub(r"[^a-z0-9]+", "-", text).strip("-")
     if not text:
         raise ImportValidationError("A stable record identifier is required.")
