@@ -2,7 +2,7 @@
 
 **Shohan's Companion** is a Discord bot and Asphalt Legends Unite companion toolkit.
 
-It includes the Fast Redeem system plus the Asphalt Legends Unite Tools Hub for:
+It is a tools-only Asphalt Legends Unite companion. The primary /dashboard command opens the entire UI; /tools is a compatibility alias. No unrelated moderation, administration, or general-purpose Discord command surface is included.
 - Car Upgrades Calculator
 - Comparator
 - Priority
@@ -28,7 +28,7 @@ Each imported record carries:
 - game/version context
 - verification status (verified_current, older_reference, or unknown)
 
-The repository currently contains source metadata and an intentionally empty data store. No numeric car, upgrade, blueprint, track, or event values are presented as current until they are imported and verified.
+The repository contains source metadata and an intentionally empty data store. Player state is persisted separately in MongoDB so personal garage, favorites, settings, usage history, notes, and redeem-code records do not contaminate the central reference dataset. No numeric car, upgrade, blueprint, track, or event values are presented as current until they are imported and verified.
 
 Reference sources currently registered:
 - A9Garage
@@ -108,3 +108,28 @@ The repository includes unit tests for the centralized data layer, importer, sou
 ## Ultimate ALU Tool Scope
 
 The project is strictly dedicated to Asphalt Legends Unite player tools: garage intelligence, resource and blueprint planning, upgrade analysis, event readiness, season/track search, progress tracking, comparisons, goals, and ALU data health/update analysis. It intentionally excludes unrelated general-purpose Discord bot features.
+
+
+## Persistent player state
+
+The dashboard now persists:
+- personal garage snapshots
+- favorite tools
+- recently used tool statistics
+- player settings
+- private notes and reminder state
+- a reserved redeem-code collection for future verified-code ingestion
+
+MongoDB indexes are created at startup for these collections. Reference ALU data remains separate from personal player state.
+
+## Redeem safety
+
+The Redeem Center is search-only until verified code records are supplied. The bot does not scrape Reddit, guess codes, or present unverified strings as active redeem codes. A future verified ingestion source can populate the MongoDB redeem-code collection with code, source, verification, first-seen time, and expiry metadata.
+
+## Command surface
+
+The intended Discord command surface is deliberately small:
+- /dashboard — primary player tools hub
+- /tools — compatibility alias for the same dashboard
+
+All other tools are reached through the dashboard UI.
