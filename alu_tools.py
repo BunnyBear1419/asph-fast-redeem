@@ -572,7 +572,7 @@ def build_tool_embed(key: str) -> discord.Embed:
     embed = discord.Embed(title=f'{tool["emoji"]} {tool["label"]}', description=tool["description"], color=TEAL)
     embed.add_field(name="Discord Interface", value="Use **Enter Tool Inputs** to open the input form for this tool.", inline=False)
     status = ALU_DATA.data_status()
-    embed.add_field(name="ALU data layer", value=(f"Centralized source registry active • {status['cars']} cars • {status['upgrade_stages']} upgrade stages • {status['tracks']} tracks • {status['events']} events.\\nGame values remain unavailable until imported and verified."), inline=False)
+    embed.add_field(name="ALU data layer", value=(f"Centralized source registry active • {status['cars']} cars • {status['upgrade_stages']} upgrade stages • {status['tracks']} tracks • {status['events']} events.\nGame values remain unavailable until imported and verified."), inline=False)
     embed.add_field(name="Data safety", value="Calculations use user inputs or verified_current centralized records. Unknown/older records are never presented as current game values.", inline=False)
     return embed
 
