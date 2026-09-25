@@ -203,7 +203,7 @@ class ALUDataStore:
 
 DEFAULT_SOURCES=(
     SourceMetadata("a9garage","A9Garage","https://a9garage.pages.dev/","2026-09-24",verification=VerificationStatus.UNKNOWN,reuse_status="reference_only",notes="Reference source only. No explicit redistribution license was found for A9Garage or its public backup repository; do not persist raw snapshots without permission."),
-    SourceMetadata("alu_database","Asphalt Legends Unite Database","https://asphaltlegendsunite.info/","2026-09-24",verification=VerificationStatus.UNKNOWN,notes="Car, event, race, track, performance and blueprint reference."),
+    SourceMetadata("alu_database","Asphalt Legends Unite Database","https://asphaltlegendsunite.info/","2026-09-24",verification=VerificationStatus.UNKNOWN,reuse_status="unknown",notes="Reference source; reuse/redistribution terms require confirmation."),
     SourceMetadata("asphalt9_info","Asphalt9.info upgrade database","https://asphalt9.info/asphalt9/tuning/upgrades/","2026-09-24",verification=VerificationStatus.OLDER_REFERENCE,notes="Reference only until ALU accuracy is verified."),
     SourceMetadata("gameloft_docs","Gameloft documentation","https://support.gameloft.com/","2026-09-24",verification=VerificationStatus.UNKNOWN,notes="Official documentation reference for upgrade-system concepts."),
 )
