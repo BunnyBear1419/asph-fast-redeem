@@ -26,6 +26,9 @@ class SourceMetadata:
     game_version: Optional[str] = None
     verification: VerificationStatus = VerificationStatus.UNKNOWN
     notes: str = ""
+    # Practical source-use policy. This is provenance metadata, not a legal license grant.
+    # "unknown" means redistribution rights have not been established.
+    reuse_status: str = "unknown"
 
 @dataclass
 class DataRecord:
