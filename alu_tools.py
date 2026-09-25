@@ -8,6 +8,7 @@ from bson import ObjectId
 
 from alu_data import load_default_store
 from alu_upgrade_resolver import ALUUpgradeResolver
+from alu_calculators import number, parse_stats, compare_stats, hunt_estimate, priority_plan, race_model, rating_difference, event_plan, search_summary
 
 ALU_DATA = load_default_store()
 ALU_UPGRADES = ALUUpgradeResolver(ALU_DATA)
@@ -254,89 +255,93 @@ class FAQView(discord.ui.View):
         await interaction.response.edit_message(embed=build_dashboard_embed(), view=AsphaltToolsView())
 
 def _number(value):
-    try:
-        return float(str(value).replace(",", "").replace("%", "").strip())
-    except (TypeError, ValueError):
-        return None
+    return number(value)
+
+
+def _lines_for_stats(rows):
+    lines=[]
+    for row in rows:
+        a="—" if row["a"] is None else f'{row["a"]:g}'
+        b="—" if row["b"] is None else f'{row["b"]:g}'
+        delta="—" if row["delta"] is None else f'{row["delta"]:+g}'
+        pct="—" if row["percent"] is None else f'{row["percent"]:+.1f}%'
+        lines.append(f'**{row["stat"].replace("_"," ").title()}:** {a} → {b} ({delta}, {pct})')
+    return lines
 
 
 def build_tool_result_embed(key, values):
-    tool = TOOL_DEFINITIONS[key]
-    embed = discord.Embed(title=f'{tool["emoji"]} {tool["label"]} — Result', color=TEAL)
-    lines = []
-    if key == "upgrades":
-        current = _number(values.get("Current rank"))
-        target = _number(values.get("Target rank"))
-        if current is not None and target is not None:
-            lines.append(f"Requested rank change: **{target-current:+g}**")
-        lines.append("Upgrade path captured.")
-        if values.get("Car"):
-            matches = ALU_DATA.search_cars(values["Car"])
-            if matches:
-                car = matches[0]
-                lines.append(f"Data match: **{car.name}** ({car.verification.value}).")
-                target_star = int(_number(values.get("Target star")) or 0)
-                if target_star > 0:
-                    resolution = ALU_UPGRADES.resolve(car.id, target_star, 1)
-                    lines.append(f"Upgrade resolver: **{resolution.status}** — {resolution.reason}")
-                    if not resolution.can_calculate:
-                        lines.append("No game-value cost/rank/parts calculation was returned because the source mapping is not verified.")
-        days = _number(values.get("Days left"))
-        lines.append(f"Days remaining: **{days:g}**" if days is not None else "Add days remaining to support urgency calculations.")
-        lines.append("Priority factors: time remaining, reward, progress, and rank readiness.")
-    elif key == "calendar":
-        lines.append("Season/event request captured.")
-        lines.append("Exact event dates require a verified season calendar data source.")
-    elif key == "hunt":
-        current, target, drop = map(_number, [values.get("Current cards"), values.get("Target cards"), values.get("Drop rate")])
-        if current is not None and target is not None and drop is not None and drop > 0:
-            missing=max(0,target-current)
-            lines += [f"Cards needed: **{missing:g}**", f"Expected attempts at {drop:g}%: **{missing/(drop/100):.1f}**"]
-        else:
-            lines.append("Enter current cards, target cards, and drop rate (%) for an estimate.")
-    elif key == "simulation":
-        races=_number(values.get("Races"))
-        lines.append(f"Races requested: **{races:g}**" if races is not None else "Enter a race count.")
-        lines.append("Game-accurate outcomes require verified car, track, and performance data.")
-    elif key == "maps":
-        lines.append(f"Map: **{values.get('Map or track','—')}**")
-        lines.append(f"Variant: **{values.get('Variant','—')}**")
-    elif key == "rating":
-        rating=_number(values.get("Gauntlet rating"))
-        reference=_number(values.get("Reference rating"))
-        if rating is not None and reference is not None:
-            lines.append(f"Rating difference from supplied reference: **{rating-reference:+g}**")
-        else:
-            lines.append("Supply a rating and reference value for a factual comparison.")
-        lines.append("No future rating outcome is guessed without verified historical data.")
-    elif key == "cost":
-        lines.append("Cost request captured.")
-        if values.get("Car"):
-            matches = ALU_DATA.search_cars(values["Car"])
-            if matches:
-                car = matches[0]
-                target_star = int(_number(values.get("Target star")) or 0)
-                resolution = ALU_UPGRADES.resolve(car.id, target_star, 1) if target_star > 0 else None
-                lines.append(f"Data match: **{car.name}** ({car.verification.value}).")
-                if resolution:
-                    lines.append(f"Upgrade resolver: **{resolution.status}** — {resolution.reason}")
-                    if not resolution.can_calculate:
-                        lines.append("Exact Credits, Tokens, XP, and Import Parts are withheld until the source-table mapping is explicitly verified.")
+    tool=TOOL_DEFINITIONS[key]
+    embed=discord.Embed(title=f'{tool["emoji"]} {tool["label"]} — Result', color=TEAL)
+    lines=[]
+    try:
+        if key in {"upgrades","cost"}:
+            cars=ALU_DATA.search_cars(values.get("Car", ""))[:1]
+            if not cars:
+                lines.append("Car not found in the centralized ALU data layer.")
             else:
-                lines.append("Car was not found in the centralized ALU data layer.")
+                c=cars[0]
+                lines.append(f'Data match: **{c.name}** • verification: **{c.verification.value}** • source: **{c.source}**')
+                if c.verification.value != "verified_current":
+                    lines.append("Exact game-value calculations are withheld because this record is not verified_current.")
+                else:
+                    current_star=int(number(values.get("Current star")) or 1)
+                    target_star=int(number(values.get("Target star")) or current_star)
+                    current_stage=int(number(values.get("Current stage")) or 0)
+                    target_stage=int(number(values.get("Target stage")) or 4)
+                    plan=[]
+                    for star in range(current_star,target_star+1):
+                        first=current_stage+1 if star==current_star else 1
+                        for stage in range(first,target_stage+1):
+                            row=ALU_DATA.upgrade_stage(c.id,star,stage)
+                            if row is None or row.verification.value != "verified_current":
+                                plan=[]; break
+                            plan.append(row)
+                        if not plan and target_star>=current_star: break
+                    if plan:
+                        totals={}
+                        for row in plan:
+                            for k,v in row.costs.items(): totals[k]=totals.get(k,0)+int(v)
+                        lines.append(f'Verified stages found: **{len(plan)}**')
+                        lines.append("Totals: " + ", ".join(f'**{k} {v:,}**' for k,v in totals.items()))
+                    else:
+                        lines.append("No complete verified stage path is loaded yet; no invented costs are shown.")
+        elif key=="comparator":
+            rows=compare_stats(parse_stats(values.get("Stats A")),parse_stats(values.get("Stats B")))
+            lines.extend(_lines_for_stats(rows) or ["Enter Stats A and Stats B as stat=value pairs to compare them."])
+        elif key=="priority":
+            r=priority_plan(_number(values.get("Days left")),_number(values.get("Reward")),_number(values.get("Progress / rank notes")),_number(values.get("Readiness")))
+            lines.append(f'Planning score: **{r["score"]:.2f}/100** (heuristic)')
+            lines.append(" • ".join(f'{k.title()}: {v:.1f}' for k,v in r.items() if k!="score"))
+        elif key=="calendar":
+            rows=search_summary(ALU_DATA,"events",values.get("Season or event",values.get("Event","")))
+            lines.extend([f'**{x["name"]}** • {x["verification"]} • source: {x["source"]}' for x in rows] or ["No matching centralized event records are loaded."])
+        elif key=="hunt":
+            r=hunt_estimate(_number(values.get("Current cards")) or 0,_number(values.get("Target cards")) or 0,_number(values.get("Drop rate")) or 0)
+            lines += [f'Cards needed: **{r["missing"]:g}**',f'Expected attempts at {r["drop_rate"]:g}%: **{r["expected_attempts"]:.1f}**']
+        elif key=="simulation":
+            r=race_model(parse_stats(values.get("Stats A")),parse_stats(values.get("Stats B")),int(_number(values.get("Races")) or 1))
+            lines += [f'Shared stats: **{", ".join(r["shared_stats"])}**',f'Input-model share: A **{r["a_share"]*100:.1f}%** • B **{r["b_share"]*100:.1f}%**',f'Expected wins: A **{r["expected_a_wins"]:.1f}** • B **{r["expected_b_wins"]:.1f}**']
+            lines.append("This is an input-only model, not a game-physics simulation.")
+        elif key=="maps":
+            rows=search_summary(ALU_DATA,"tracks",values.get("Map or track", ""))
+            lines.extend([f'**{x["name"]}** • {x["verification"]} • source: {x["source"]}' for x in rows] or ["No matching centralized track records are loaded."])
+        elif key=="rating":
+            r=rating_difference(_number(values.get("Gauntlet rating")) or 0,_number(values.get("Reference rating")) or 0)
+            lines.append(f'Supplied rating difference: **{r["difference"]:+g}**')
+            lines.append("This compares supplied values only; it does not predict future results.")
+        elif key=="events":
+            r=event_plan(_number(values.get("Attempts available")),_number(values.get("Current progress")),_number(values.get("Target reward")))
+            lines.append(f'Attempts available: **{r["attempts"] if r["attempts"] is not None else "—"}**')
+            if r["remaining"] is not None: lines.append(f'Remaining target: **{r["remaining"]:g}** • completion: **{r["completion_percent"]:.1f}%**')
+            matches=search_summary(ALU_DATA,"events",values.get("Event", ""))
+            if matches: lines.append(f'Centralized event matches: **{len(matches)}**')
         else:
-            lines.append("Enter a car to check the centralized upgrade resolver.")
-    elif key == "events":
-        attempts=_number(values.get("Attempts available"))
-        progress=_number(values.get("Current progress"))
-        if attempts is not None: lines.append(f"Attempts available: **{attempts:g}**")
-        if progress is not None: lines.append(f"Current progress: **{progress:g}**")
-        lines.append("Exact reward/stage calculations require verified event data.")
-    else:
-        lines.append("Inputs received.")
-    embed.description="\n\n".join(lines)
+            lines.append("Inputs received and processed.")
+    except ValueError as exc:
+        lines.append(f"⚠️ {exc}")
+    embed.description="\\n\\n".join(lines)
     if values:
-        embed.add_field(name="Inputs", value="\n".join(f"**{k}:** {v}" for k,v in values.items())[:1024], inline=False)
+        embed.add_field(name="Inputs",value="\\n".join(f'**{k}:** {v}' for k,v in values.items())[:1024],inline=False)
     embed.set_footer(text="🧪 Shohan's Lab  •  🌐 alu.shohanlab.com")
     return embed
 
@@ -361,7 +366,8 @@ def build_tool_embed(key: str) -> discord.Embed:
     embed.add_field(name="Discord Interface", value="Use **Enter Tool Inputs** to open the input form for this tool.", inline=False)
     status = ALU_DATA.data_status()
     embed.add_field(name="ALU data layer", value=(f"Centralized source registry active • {status[\"cars\"]} cars • {status[\"upgrade_stages\"]} upgrade stages • {status[\"tracks\"]} tracks • {status[\"events\"]} events.\\nGame values remain unavailable until imported and verified."), inline=False)
-    embed.add_field(name="Planned data layer", value="The interface is separated from the calculation/data engine so verified ALU data can be added or refreshed without rebuilding the Discord UI.", inline=False)
+    embed.add_field(name="Data safety", value="Calculations use user inputs or verified_current centralized records. Unknown/older records are never presented as current game values.", inline=False)
+    return embed
 
 
 def build_dashboard_embed() -> discord.Embed:
