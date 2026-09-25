@@ -58,7 +58,7 @@ def test_hierarchical_picker_groups_cars_by_class_and_manufacturer():
     assert car_manufacturer(cars[0]) == "Koenigsegg"
     assert class_options(cars) == ["D", "S"]
     assert manufacturer_options(filter_cars(cars, class_name="S")) == ["Koenigsegg"]
-    assert [c.name for c in filter_cars(cars, class_name="S", manufacturer="Koenigsegg")] == ["Jesko", "Jesko Absolut"]
+    assert [c.name for c in filter_cars(cars, class_name="S", manufacturer="Koenigsegg")] == ["Jesko Absolut", "Koenigsegg Jesko"]
 
 
 def test_hierarchical_search_matches_model_manufacturer_and_class():
