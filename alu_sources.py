@@ -117,6 +117,51 @@ def _a9_car_record(row: list[Any], *, collected_at: str) -> dict[str, Any]:
     }
 
 
+
+def _parse_blueprint_requirements(value: Any) -> list[int]:
+    if not isinstance(value, str):
+        return []
+    values: list[int] = []
+    for part in value.split("/"):
+        part = part.strip()
+        if part.isdigit():
+            values.append(int(part))
+    return values
+
+
+def _a9_upgrade_catalog(payload: Mapping[str, Any], *, collected_at: str) -> dict[str, Any]:
+    """Normalize A9Garage's indexed upgrade tables without guessing semantics."""
+    refs: dict[str, dict[str, int]] = {}
+    blueprints: dict[str, list[int]] = {}
+    categories = ("engine", "drivetrain", "exhaust", "tires")
+    for row in payload.get("cars", []) or []:
+        if not isinstance(row, list) or len(row) < 18:
+            continue
+        car_id = f"car:{row[0]}"
+        raw_refs = row[10:14]
+        if all(isinstance(x, int) and x >= 0 for x in raw_refs):
+            refs[car_id] = {category: int(value) for category, value in zip(categories, raw_refs)}
+        bp = _parse_blueprint_requirements(row[15])
+        if bp:
+            blueprints[car_id] = bp
+    return {
+        "id": "a9garage-upgrade-catalog",
+        "source_schema": "api_cars.json",
+        "source_version": payload.get("v"),
+        "cost_tables": payload.get("cost_tables") or [],
+        "exp_tables": payload.get("exp_tables") or [],
+        "upg_tables": payload.get("upg_tables") or [],
+        "bp_tables": payload.get("bp_tables") or [],
+        "sum_tables": payload.get("sum_tables") or [],
+        "cd_tables": payload.get("cd_tables") or [],
+        "car_table_refs": refs,
+        "car_blueprint_requirements": blueprints,
+        "source_url": A9GARAGE_BACKUP_ENDPOINTS["cars"],
+        "collected_at": collected_at,
+        "verification": VerificationStatus.UNKNOWN.value,
+        "notes": "Indexed A9Garage upgrade/cost/XP/blueprint tables preserved verbatim; semantics are not independently verified.",
+    }
+
 async def collect_a9garage_backup_records() -> dict[str, Any]:
     """Collect structured A9Garage backup data without declaring it current."""
     collected_at = datetime.now(timezone.utc).isoformat()
@@ -126,6 +171,7 @@ async def collect_a9garage_backup_records() -> dict[str, Any]:
         fetch_json(A9GARAGE_BACKUP_ENDPOINTS["calendar"]),
     )
 
+    upgrade_catalog = _a9_upgrade_catalog(cars_payload, collected_at=collected_at)
     cars = [
         _a9_car_record(row, collected_at=collected_at)
         for row in cars_payload.get("cars", [])
@@ -181,11 +227,12 @@ async def collect_a9garage_backup_records() -> dict[str, Any]:
         "source_id": "a9garage",
         "collected_at": collected_at,
         "cars": cars,
+        "upgrade_catalogs": [upgrade_catalog],
         "tracks": tracks,
         "events": events,
         "source_endpoints": dict(A9GARAGE_BACKUP_ENDPOINTS),
         "source_schema_version": cars_payload.get("v"),
-        "counts": {"cars": len(cars), "tracks": len(tracks), "events": len(events)},
+        "counts": {"cars": len(cars), "upgrade_catalogs": 1, "tracks": len(tracks), "events": len(events)},
         "verification": VerificationStatus.UNKNOWN.value,
     }
 
