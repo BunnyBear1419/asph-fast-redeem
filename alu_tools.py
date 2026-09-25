@@ -57,23 +57,30 @@ class ToolInputModal(discord.ui.Modal):
         self.cog = cog
         self.user_id = str(user_id) if user_id is not None else None
         self.initial_values = dict(initial_values or {})
-        for index, field_name in enumerate(tool["fields"][:5]):
+        car_fields = set(car_fields_for_tool(tool))
+        input_fields = [field for field in tool["fields"] if field not in car_fields]
+        for index, field_name in enumerate(input_fields[:5]):
             self.add_item(discord.ui.TextInput(
                 label=field_name[:45],
                 custom_id=f"field_{index}",
                 default=str(self.initial_values.get(field_name, ""))[:500] or None,
-                required=index == 0,
+                required=index == 0 and not self.initial_values.get(field_name),
                 max_length=500,
                 style=discord.TextStyle.paragraph if field_name in {"Stats A", "Stats B", "Progress / rank notes"} else discord.TextStyle.short,
             ))
 
     async def on_submit(self, interaction: discord.Interaction):
         tool = TOOL_DEFINITIONS[self.key]
-        values = {}
+        car_fields = set(car_fields_for_tool(tool))
+        input_fields = [field for field in tool["fields"] if field not in car_fields]
+        values = {
+            field: value for field, value in self.initial_values.items()
+            if value
+        }
         for index, item in enumerate(self.children):
             value = getattr(item, "value", "").strip()
             if value:
-                values[tool["fields"][index]] = value
+                values[input_fields[index]] = value
         if self.cog is not None and self.user_id is not None:
             await self.cog.record_tool_use(self.user_id, self.key)
             await self.cog.persist_tool_state(self.user_id, self.key, values)
@@ -528,7 +535,7 @@ class ToolActionView(discord.ui.View):
             button.callback = choose
             self.add_item(button)
 
-    @discord.ui.button(label="Enter Tool Inputs", style=discord.ButtonStyle.primary, emoji="🧰", row=0)
+    @discord.ui.button(label="Enter Other Inputs", style=discord.ButtonStyle.primary, emoji="🧰", row=0)
     async def inputs(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(
             ToolInputModal(
