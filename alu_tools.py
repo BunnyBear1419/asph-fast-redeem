@@ -92,7 +92,7 @@ class AsphaltToolsSelect(discord.ui.Select):
         embed = discord.Embed(
             title=f'{tool["emoji"]} {tool["label"]}',
             description=tool["description"],
-            color=discord.Color.from_rgb(14, 21, 46),
+            color=discord.Color.from_rgb(7, 24, 27),
         )
         embed.add_field(
             name="Asphalt Legends Unite",
@@ -130,7 +130,7 @@ class AsphaltToolsCog(commands.Cog):
             ),
             color=discord.Color.from_rgb(14, 21, 46),
         )
-        embed.set_footer(text="Shohan's Companion • Tools Hub")
+        embed.set_footer(text="🧪 Shohan's Lab  •  🌐 alu.shohanlab.com")
         await interaction.response.send_message(
             embed=embed,
             view=AsphaltToolsView(),
