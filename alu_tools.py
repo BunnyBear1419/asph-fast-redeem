@@ -1,5 +1,6 @@
 import discord
 from discord import app_commands
+from discord.ext import commands
 
 
 TOOL_DEFINITIONS = {
@@ -112,7 +113,7 @@ class AsphaltToolsView(discord.ui.View):
         self.add_item(AsphaltToolsSelect())
 
 
-class AsphaltToolsCog(discord.ext.commands.Cog):
+class AsphaltToolsCog(commands.Cog):
     def __init__(self, bot: discord.Client):
         self.bot = bot
 
