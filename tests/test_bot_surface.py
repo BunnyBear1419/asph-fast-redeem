@@ -7,12 +7,20 @@ def _commands(path):
     found = []
     for node in ast.walk(tree):
         for decorator in getattr(node, "decorator_list", []):
-            if isinstance(decorator, ast.Call) and isinstance(decorator.func, ast.Attribute):
-                if isinstance(decorator.func.value, ast.Name) and decorator.func.value.id == "bot":
-                    if decorator.func.attr == "tree" and isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef)):
-                        for kw in decorator.keywords:
-                            if kw.arg == "name" and isinstance(kw.value, ast.Constant):
-                                found.append(kw.value.value)
+            if not (isinstance(decorator, ast.Call) and isinstance(decorator.func, ast.Attribute)):
+                continue
+            tree_attr = decorator.func.value
+            if (
+                isinstance(tree_attr, ast.Attribute)
+                and isinstance(tree_attr.value, ast.Name)
+                and tree_attr.value.id == "bot"
+                and tree_attr.attr == "tree"
+                and decorator.func.attr == "command"
+                and isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef))
+            ):
+                for kw in decorator.keywords:
+                    if kw.arg == "name" and isinstance(kw.value, ast.Constant):
+                        found.append(kw.value.value)
     return found
 
 
