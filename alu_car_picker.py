@@ -161,6 +161,18 @@ class CarPickerView(discord.ui.View):
         self.add_item(search)
         self.add_item(back)
 
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if (
+            str(interaction.guild_id) != self.owner_view.guild_id
+            or str(interaction.user.id) != self.owner_view.user_id
+        ):
+            await interaction.response.send_message(
+                "❌ This car picker belongs to another player.",
+                ephemeral=True,
+            )
+            return False
+        return True
+
     def embed(self):
         if not self.cars:
             description = (
