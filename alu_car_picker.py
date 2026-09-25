@@ -91,7 +91,7 @@ class CarSearchModal(discord.ui.Modal):
             self.store,
             query=self.query.value.strip(),
         )
-        await interaction.response.edit_message(embed=view.embed(), view=view)
+        await interaction.response.send_message(embed=view.embed(), view=view, ephemeral=True)
 
 
 class CarPickerView(discord.ui.View):
