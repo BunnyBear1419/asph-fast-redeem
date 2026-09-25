@@ -489,9 +489,9 @@ def build_tool_result_embed(key, values):
             lines.append("Inputs received and processed.")
     except ValueError as exc:
         lines.append(f"⚠️ {exc}")
-    embed.description="\\n\\n".join(lines)
+    embed.description="\n\n".join(lines)
     if values:
-        embed.add_field(name="Inputs",value="\\n".join(f'**{k}:** {v}' for k,v in values.items())[:1024],inline=False)
+        embed.add_field(name="Inputs",value="\n".join(f'**{k}:** {v}' for k,v in values.items())[:1024],inline=False)
     embed.set_footer(text="🧪 Shohan's Lab  •  🌐 alu.shohanlab.com")
     return embed
 
