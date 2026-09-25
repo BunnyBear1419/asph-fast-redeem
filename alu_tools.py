@@ -99,7 +99,7 @@ class AsphaltToolsSelect(discord.ui.Select):
             value="This tool is available from the Discord Tools Hub.",
             inline=False,
         )
-        embed.set_footer(text="Asphalt Legends Unite • Tools")
+        embed.set_footer(text="Shohan's Companion • Asphalt Legends Unite Tools")
 
         await interaction.response.edit_message(
             embed=embed,
@@ -123,14 +123,14 @@ class AsphaltToolsCog(commands.Cog):
     )
     async def tools(self, interaction: discord.Interaction):
         embed = discord.Embed(
-            title="🏁 Asphalt Legends Unite Tools",
+            title="🏁 Shohan's Companion • Asphalt Legends Unite Tools",
             description=(
                 "Select a tool below to open it in Discord.\n\n"
                 "This dashboard contains the tools available for Asphalt Legends Unite."
             ),
             color=discord.Color.from_rgb(14, 21, 46),
         )
-        embed.set_footer(text="Asphalt Legends Unite • Tools Hub")
+        embed.set_footer(text="Shohan's Companion • Tools Hub")
         await interaction.response.send_message(
             embed=embed,
             view=AsphaltToolsView(),
