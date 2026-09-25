@@ -36,8 +36,7 @@ def test_a9garage_car_row_normalization_preserves_unknown_verification():
 
 
 @pytest.mark.asyncio
-async def test_sync_merges_structured_records(monkeypatch, tmp_path):
-    from alu_data import empty_store
+async def test_sync_does_not_persist_reference_only_source(monkeypatch, tmp_path):
     import alu_sync
 
     payload = {
@@ -64,8 +63,25 @@ async def test_sync_merges_structured_records(monkeypatch, tmp_path):
 
     monkeypatch.setattr(alu_sync, "collect_a9garage_backup_records", fake_collect)
     result = await alu_sync.sync_a9garage(str(tmp_path / "alu_data.json"))
-    assert result["counts"]["cars"] == 1
-    assert result["verification"] == "unknown"
+    assert result["persisted"] is False
+    assert result["reuse_status"] == "reference_only"
+    assert not (tmp_path / "alu_data.json").exists()
+
+
+def test_a9garage_persistence_requires_explicit_redistribution_status():
+    import asyncio
+    import alu_sync
+
+    async def fake_collect():
+        return {"cars": [], "tracks": [], "events": [], "counts": {"cars": 0, "tracks": 0, "events": 0}, "verification": "unknown"}
+
+    original = alu_sync.collect_a9garage_backup_records
+    try:
+        alu_sync.collect_a9garage_backup_records = fake_collect
+        with pytest.raises(RuntimeError, match="not explicitly redistributable"):
+            asyncio.run(alu_sync.sync_a9garage(persist=True))
+    finally:
+        alu_sync.collect_a9garage_backup_records = original
 
 
 def test_a9garage_upgrade_catalog_preserves_indexed_tables():
@@ -85,7 +101,7 @@ def test_a9garage_upgrade_catalog_preserves_indexed_tables():
 
     assert record["source_schema"] == "api_cars.json"
     assert record["cost_tables"] == [[[1150]]]
-    assert record["car_table_refs"]["car:1"]["engine"] == 0
-    assert record["car_table_refs"]["car:1"]["tires"] == 0
+    assert record["car_table_refs"]["car:1"]["slot_1"] == 0
+    assert record["car_table_refs"]["car:1"]["slot_4"] == 0
     assert record["car_blueprint_requirements"]["car:1"] == [5, 8, 30]
     assert record["verification"] == "unknown"
