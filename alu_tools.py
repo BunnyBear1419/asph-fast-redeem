@@ -251,14 +251,16 @@ def build_faq_embed(category=None):
     return embed
 
 class FAQCategorySelect(discord.ui.Select):
-    def __init__(self):
+    def __init__(self, cog=None):
+        self.cog = cog
         super().__init__(placeholder="Select an FAQ topic...", options=[discord.SelectOption(label=k.title(), value=k) for k in FAQ_CATEGORIES])
     async def callback(self, interaction):
-        await interaction.response.edit_message(embed=build_faq_embed(self.values[0]), view=FAQQuestionView(self.values[0]))
+        await interaction.response.edit_message(embed=build_faq_embed(self.values[0]), view=FAQQuestionView(self.values[0], cog=self.cog))
 
 class FAQQuestionSelect(discord.ui.Select):
-    def __init__(self, category):
+    def __init__(self, category, cog=None):
         self.category = category
+        self.cog = cog
         super().__init__(placeholder="Select a question...", options=[discord.SelectOption(label=q[:100], value=q) for q in FAQ_CATEGORIES[category]])
     async def callback(self, interaction):
         question = self.values[0]
@@ -266,26 +268,36 @@ class FAQQuestionSelect(discord.ui.Select):
         embed = discord.Embed(title="❓ " + question, description=answer, color=TEAL)
         embed.add_field(name="Topic", value=self.category.title(), inline=False)
         embed.set_footer(text="🧪 Shohan's Lab  •  🌐 alu.shohanlab.com")
-        await interaction.response.edit_message(embed=embed, view=FAQQuestionView(self.category))
+        await interaction.response.edit_message(embed=embed, view=FAQQuestionView(self.category, cog=self.cog))
 
 class FAQQuestionView(discord.ui.View):
-    def __init__(self, category):
+    def __init__(self, category, cog=None):
         super().__init__(timeout=300)
-        self.add_item(FAQQuestionSelect(category))
+        self.cog = cog
+        self.add_item(FAQQuestionSelect(category, cog=self.cog))
     @discord.ui.button(label="FAQ Topics", style=discord.ButtonStyle.secondary, emoji="📚", row=1)
     async def topics(self, interaction, button):
-        await interaction.response.edit_message(embed=build_faq_embed(), view=FAQView())
+        await interaction.response.edit_message(embed=build_faq_embed(), view=FAQView(cog=getattr(self, "cog", None)))
     @discord.ui.button(label="Back to Tools", style=discord.ButtonStyle.secondary, emoji="↩️", row=1)
     async def back(self, interaction, button):
-        await interaction.response.edit_message(embed=build_dashboard_embed(), view=AsphaltToolsView())
+        if self.cog is not None:
+            view = CompanionDashboardView(self.cog, interaction.guild_id, interaction.user.id)
+        else:
+            view = AsphaltToolsView()
+        await interaction.response.edit_message(embed=build_dashboard_embed(), view=view)
 
 class FAQView(discord.ui.View):
-    def __init__(self):
+    def __init__(self, cog=None):
         super().__init__(timeout=300)
-        self.add_item(FAQCategorySelect())
+        self.cog = cog
+        self.add_item(FAQCategorySelect(cog=self.cog))
     @discord.ui.button(label="Back to Tools", style=discord.ButtonStyle.secondary, emoji="↩️", row=1)
     async def back(self, interaction, button):
-        await interaction.response.edit_message(embed=build_dashboard_embed(), view=AsphaltToolsView())
+        if self.cog is not None:
+            view = CompanionDashboardView(self.cog, interaction.guild_id, interaction.user.id)
+        else:
+            view = AsphaltToolsView()
+        await interaction.response.edit_message(embed=build_dashboard_embed(), view=view)
 
 def _number(value):
     return number(value)
@@ -428,17 +440,22 @@ def build_tool_result_embed(key, values):
 
 
 class ToolActionView(discord.ui.View):
-    def __init__(self, key: str):
+    def __init__(self, key: str, category: str = "garage", owner_view=None):
         super().__init__(timeout=300)
         self.key = key
+        self.category = category
+        self.owner_view = owner_view
 
     @discord.ui.button(label="Enter Tool Inputs", style=discord.ButtonStyle.primary, emoji="🧰")
     async def inputs(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(ToolInputModal(self.key))
 
-    @discord.ui.button(label="Back to Tools", style=discord.ButtonStyle.secondary, emoji="↩️")
+    @discord.ui.button(label="↩️ Back", style=discord.ButtonStyle.secondary, emoji="↩️")
     async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.edit_message(embed=build_dashboard_embed(), view=AsphaltToolsView())
+        if self.owner_view is not None:
+            await self.owner_view.show_category(interaction, self.category)
+        else:
+            await interaction.response.edit_message(embed=build_dashboard_embed(), view=AsphaltToolsView())
 
 
 def build_tool_embed(key: str) -> discord.Embed:
@@ -451,38 +468,196 @@ def build_tool_embed(key: str) -> discord.Embed:
     return embed
 
 
+# Dashboard-first navigation mirrors the ALU Gauntlet menu pattern:
+# one home embed -> section selector -> action selector -> contextual navigation.
+TOOL_CATEGORIES = {
+    "garage": {
+        "label": "Garage & Upgrades",
+        "emoji": "🚗",
+        "description": "Garage progress, blueprints, upgrades, ranks, stars, parts and car builds.",
+        "tools": ["upgrades", "blueprints", "upgrade_planner", "import_parts", "rank", "star_up", "garage_progress", "evo", "car_compare"],
+    },
+    "planning": {
+        "label": "Calculators & Planning",
+        "emoji": "🧮",
+        "description": "Calculators, comparisons and goal-oriented planning tools.",
+        "tools": ["comparator", "priority", "hunt", "simulation", "rating", "cost"],
+    },
+    "events": {
+        "label": "Events & Season",
+        "emoji": "🏁",
+        "description": "Season calendar, event planning and documented event rewards.",
+        "tools": ["calendar", "events", "event_rewards"],
+    },
+    "tracks": {
+        "label": "Tracks & Knowledge",
+        "emoji": "🗺️",
+        "description": "Race maps, ALU reference information and frequently asked questions.",
+        "tools": ["maps", "faq"],
+    },
+    "progress": {
+        "label": "Progress & Data",
+        "emoji": "📊",
+        "description": "Personal notes plus centralized ALU data health and provenance.",
+        "tools": ["data_health", "notes"],
+    },
+}
+
+
 def build_dashboard_embed() -> discord.Embed:
     embed = discord.Embed(
-        title="🏁 Shohan's Companion • Asphalt Legends Unite Tools",
-        description=("Select a tool below to open its Discord interface.\n\nThe dashboard covers reference lookups, calculators, planners, comparisons, and private notes. Each tool uses explicit inputs or verified centralized records; numerical game data is never invented."),
+        title="🏁 SHOHAN'S COMPANION • ALU PLAYER HUB",
+        description="**Welcome back, driver.** Everything you need is one tap away. Choose a section below — no command memorizing required.",
         color=TEAL,
     )
-    embed.add_field(name="Available Tools", value=("🔧 Upgrades  •  📊 Comparator  •  🏆 Priority  •  📅 Calendar\n"
-            "❓ FAQ  •  🚙 Hunt  •  🏎️ Simulation  •  🗺️ Maps\n"
-            "🔮 Rating  •  💸 Cost  •  🏁 Events\n"
-            "🧩 Blueprints • 🛠️ Upgrade Planner • 🔩 Parts • 📈 Rank • ⭐ Star-Up\n"
-            "🚗 Garage Progress • 🎁 Event Rewards • 🧬 EVO • 🏎️ Car Compare • 🩺 Data Health • 📝 Notes"), inline=False)
-    embed.set_footer(text="🧪 Shohan's Lab  •  🌐 alu.shohanlab.com")
+    for category in TOOL_CATEGORIES.values():
+        embed.add_field(
+            name=f'{category["emoji"]} {category["label"]}',
+            value=category["description"],
+            inline=False,
+        )
+    embed.set_footer(text="Shohan's Companion • Select a section to continue")
     return embed
 
 
-class AsphaltToolsSelect(discord.ui.Select):
-    def __init__(self):
-        options = [discord.SelectOption(label=data["label"], value=key, emoji=data["emoji"], description=data["description"][:100]) for key, data in TOOL_DEFINITIONS.items()]
-        super().__init__(placeholder="Select an Asphalt Legends Unite tool...", min_values=1, max_values=1, options=options)
+class CompanionActionSelect(discord.ui.Select):
+    def __init__(self, owner_view, category: str):
+        self.owner_view = owner_view
+        self.category = category
+        options = [
+            discord.SelectOption(
+                label=TOOL_DEFINITIONS[key]["label"][:100],
+                value=key,
+                emoji=TOOL_DEFINITIONS[key]["emoji"],
+                description=TOOL_DEFINITIONS[key]["description"][:100],
+            )
+            for key in TOOL_CATEGORIES[category]["tools"]
+        ]
+        super().__init__(placeholder="Choose an action…", min_values=1, max_values=1, options=options, row=1)
 
     async def callback(self, interaction: discord.Interaction):
         key = self.values[0]
         if key == "faq":
-            await interaction.response.edit_message(embed=build_faq_embed(), view=FAQView())
+            await interaction.response.edit_message(embed=build_faq_embed(), view=FAQView(cog=self.owner_view.cog))
             return
-        await interaction.response.edit_message(embed=build_tool_embed(key), view=ToolActionView(key))
+        if key == "notes":
+            await self.owner_view.cog.show_notes(interaction)
+            return
+        await interaction.response.edit_message(
+            embed=build_tool_embed(key),
+            view=ToolActionView(key, category=self.category, owner_view=self.owner_view),
+        )
+
+
+class CompanionDashboardView(discord.ui.View):
+    def __init__(self, cog, guild_id: str, user_id: str):
+        super().__init__(timeout=900)
+        self.cog = cog
+        self.guild_id = str(guild_id)
+        self.user_id = str(user_id)
+        self.current_category = None
+        self._add_category_select()
+        self._refresh_navigation()
+
+    def _add_category_select(self):
+        owner = self
+
+        class CategorySelect(discord.ui.Select):
+            def __init__(self):
+                options = [
+                    discord.SelectOption(
+                        label=data["label"],
+                        value=key,
+                        emoji=data["emoji"],
+                        description=data["description"][:100],
+                    )
+                    for key, data in TOOL_CATEGORIES.items()
+                ]
+                super().__init__(placeholder="Choose an ALU section…", min_values=1, max_values=1, options=options, row=0)
+
+            async def callback(self, interaction: discord.Interaction):
+                await owner.show_category(interaction, self.values[0])
+
+        self.add_item(CategorySelect())
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if str(interaction.guild_id) != self.guild_id or str(interaction.user.id) != self.user_id:
+            await interaction.response.send_message("❌ This Companion dashboard belongs to another player.", ephemeral=True)
+            return False
+        return True
+
+    def _refresh_navigation(self):
+        nav_ids = {"companion_back", "companion_home", "companion_refresh", "companion_help"}
+        for item in list(self.children):
+            if getattr(item, "custom_id", None) in nav_ids:
+                self.remove_item(item)
+
+        back = discord.ui.Button(label="↩️ Back", style=discord.ButtonStyle.secondary, custom_id="companion_back", row=2, disabled=self.current_category is None)
+        home = discord.ui.Button(label="🏠 Home", style=discord.ButtonStyle.primary, custom_id="companion_home", row=2)
+        refresh = discord.ui.Button(label="🔄 Refresh", style=discord.ButtonStyle.secondary, custom_id="companion_refresh", row=2)
+        help_button = discord.ui.Button(label="❓ Help", style=discord.ButtonStyle.secondary, custom_id="companion_help", row=2)
+
+        async def go_back(interaction):
+            await self.show_home(interaction)
+
+        async def go_home(interaction):
+            await self.show_home(interaction)
+
+        async def do_refresh(interaction):
+            await self.refresh_current(interaction)
+
+        async def show_help(interaction):
+            await interaction.response.edit_message(embed=build_faq_embed(), view=FAQView(cog=self.cog))
+
+        back.callback = go_back
+        home.callback = go_home
+        refresh.callback = do_refresh
+        help_button.callback = show_help
+        self.add_item(back)
+        self.add_item(home)
+        self.add_item(refresh)
+        self.add_item(help_button)
+
+    async def show_home(self, interaction: discord.Interaction):
+        self.current_category = None
+        for item in list(self.children):
+            if isinstance(item, CompanionActionSelect):
+                self.remove_item(item)
+        self._refresh_navigation()
+        await interaction.response.edit_message(embed=build_dashboard_embed(), view=self)
+
+    async def show_category(self, interaction: discord.Interaction, category: str):
+        self.current_category = category
+        for item in list(self.children):
+            if isinstance(item, CompanionActionSelect):
+                self.remove_item(item)
+        self.add_item(CompanionActionSelect(self, category))
+        self._refresh_navigation()
+        data = TOOL_CATEGORIES[category]
+        embed = discord.Embed(
+            title=f'{data["emoji"]} {data["label"].upper()}',
+            description=f'{data["description"]}\n\n**Choose an action below.** Use ↩️ Back anytime to return to the hub.',
+            color=TEAL,
+        )
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    async def refresh_current(self, interaction: discord.Interaction):
+        if self.current_category is None:
+            await interaction.response.edit_message(embed=build_dashboard_embed(), view=self)
+            return
+        await self.show_category(interaction, self.current_category)
+
+
+class AsphaltToolsSelect(CompanionActionSelect):
+    """Compatibility alias for older references."""
+    def __init__(self):
+        super().__init__(owner_view=None, category="garage")
 
 
 class AsphaltToolsView(discord.ui.View):
+    """Legacy empty compatibility view; new commands use CompanionDashboardView."""
     def __init__(self):
         super().__init__(timeout=300)
-        self.add_item(AsphaltToolsSelect())
 
 
 class AsphaltToolsCog(commands.Cog):
@@ -566,9 +741,15 @@ class AsphaltToolsCog(commands.Cog):
     def cog_unload(self):
         self.reminder_loop.cancel()
 
-    @app_commands.command(name="tools", description="🛠️ Open the Asphalt Legends Unite tools dashboard.")
+    @app_commands.command(name="dashboard", description="🏁 Open the Shohan's Companion ALU player dashboard.")
+    async def dashboard(self, interaction: discord.Interaction):
+        view = CompanionDashboardView(self, interaction.guild_id, interaction.user.id)
+        await interaction.response.send_message(embed=build_dashboard_embed(), view=view, ephemeral=True)
+
+    @app_commands.command(name="tools", description="🛠️ Open the Shohan's Companion ALU tools dashboard.")
     async def tools(self, interaction: discord.Interaction):
-        await interaction.response.send_message(embed=build_dashboard_embed(), view=AsphaltToolsView(), ephemeral=True)
+        view = CompanionDashboardView(self, interaction.guild_id, interaction.user.id)
+        await interaction.response.send_message(embed=build_dashboard_embed(), view=view, ephemeral=True)
 
     @app_commands.command(name="notes", description="📝 Open your private Notes & Reminders.")
     async def notes(self, interaction: discord.Interaction):
