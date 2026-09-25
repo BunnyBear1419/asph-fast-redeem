@@ -133,7 +133,7 @@ def _a9_upgrade_catalog(payload: Mapping[str, Any], *, collected_at: str) -> dic
     """Normalize A9Garage's indexed upgrade tables without guessing semantics."""
     refs: dict[str, dict[str, int]] = {}
     blueprints: dict[str, list[int]] = {}
-    categories = ("engine", "drivetrain", "exhaust", "tires")
+    categories = ("slot_1", "slot_2", "slot_3", "slot_4")
     for row in payload.get("cars", []) or []:
         if not isinstance(row, list) or len(row) < 18:
             continue
