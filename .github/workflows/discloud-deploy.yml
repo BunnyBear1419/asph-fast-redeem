@@ -14,7 +14,7 @@ jobs:
 
       - name: 📦 Create Discloud Deployment Bundle
         run: |
-          zip -r deploy.zip bot.py discloud.config requirements.txt
+          zip -r deploy.zip *.py data discloud.config requirements.txt
 
       - name: ⚡ Upload Bundle to Discloud Platinum API Nodes
         run: |
