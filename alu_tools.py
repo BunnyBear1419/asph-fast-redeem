@@ -9,6 +9,7 @@ from bson import ObjectId
 from alu_data import load_default_store
 from alu_upgrade_resolver import ALUUpgradeResolver
 from alu_calculators import number, parse_stats, compare_stats, hunt_estimate, priority_plan, race_model, rating_difference, event_plan, search_summary
+from alu_planners import blueprint_plan, star_up_plan, upgrade_stage_plan, import_parts_plan, rank_progress, garage_progress, event_reward_plan, compare_cars, evo_compare
 
 ALU_DATA = load_default_store()
 ALU_UPGRADES = ALUUpgradeResolver(ALU_DATA)
@@ -26,6 +27,15 @@ TOOL_DEFINITIONS = {
     "cost": {"label": "Cost Calculator", "emoji": "💸", "description": "Calculate upgrade costs when verified game cost data is available.", "fields": ["Car", "Current star", "Target star", "Current rank", "Target rank"]},
     "events": {"label": "Event Calculator", "emoji": "🏁", "description": "Plan event stages, attempts, rewards, and targets.", "fields": ["Event", "Stage", "Attempts available", "Target reward", "Current progress"]},
     "notes": {"label": "Notes & Reminders", "emoji": "📝", "description": "Create private notes and reminder entries.", "fields": ["Title", "Note", "Reminder"]},
+    "blueprints": {"label": "Blueprint Planner", "emoji": "🧩", "description": "Calculate blueprint gaps from values you provide.", "fields": ["Car", "Current cards", "Target cards", "Owned cards", "Wild Cards"]},
+    "upgrade_planner": {"label": "Upgrade Planner", "emoji": "🛠️", "description": "Build a verified upgrade-stage path when verified stage data exists.", "fields": ["Car", "Current star", "Current stage", "Target star", "Target stage"]},
+    "import_parts": {"label": "Import Parts Planner", "emoji": "🔩", "description": "Compare current and target part counts.", "fields": ["Car", "Current parts", "Target parts"]},
+    "rank": {"label": "Rank Calculator", "emoji": "📈", "description": "Measure supplied rank progress toward a target.", "fields": ["Car", "Current rank", "Target rank"]},
+    "star_up": {"label": "Star-Up Planner", "emoji": "⭐", "description": "Calculate star-up card requirements from a supplied requirement table.", "fields": ["Car", "Current star", "Target star", "Requirements", "Current cards"]},
+    "garage_progress": {"label": "Garage Progress Tracker", "emoji": "🚗", "description": "Track supplied garage completion totals.", "fields": ["Completed", "Total", "Goal", "Category"]},
+    "event_rewards": {"label": "Event Reward Planner", "emoji": "🎁", "description": "Estimate reward progress from supplied attempt and reward values.", "fields": ["Event", "Attempts", "Reward per attempt", "Target reward", "Current reward"]},
+    "evo": {"label": "EVO / Build Comparison", "emoji": "🧬", "description": "Compare verified EVO profiles without inventing missing values.", "fields": ["Car A", "Car B", "Context"]},
+    "car_compare": {"label": "Car Comparison", "emoji": "🏎️", "description": "Compare centralized car records and their provenance.", "fields": ["Car A", "Car B", "Stats A", "Stats B", "Criteria"]},
 }
 
 TEAL = discord.Color.from_rgb(7, 24, 27)
@@ -356,6 +366,45 @@ def build_tool_result_embed(key, values):
             if r["remaining"] is not None: lines.append(f'Remaining target: **{r["remaining"]:g}** • completion: **{r["completion_percent"]:.1f}%**')
             matches=search_summary(ALU_DATA,"events",values.get("Event", ""))
             if matches: lines.append(f'Centralized event matches: **{len(matches)}**')
+        elif key=="blueprints":
+            r=blueprint_plan(_number(values.get("Current cards")) or 0,_number(values.get("Target cards")) or 0,_number(values.get("Owned cards")) or 0,_number(values.get("Wild Cards")) or 0)
+            lines += [f'Required cards: **{r["missing"]:g}**', f'Remaining after owned/wild cards: **{r["remaining"]:g}**']
+        elif key=="upgrade_planner":
+            cars=ALU_DATA.search_cars(values.get("Car",""))[:1]
+            if not cars:
+                lines.append("Car not found in the centralized ALU data layer.")
+            else:
+                r=upgrade_stage_plan(ALU_DATA,cars[0].id,int(_number(values.get("Current star")) or 1),int(_number(values.get("Current stage")) or 0),int(_number(values.get("Target star")) or 1),int(_number(values.get("Target stage")) or 4))
+                lines.append(f'Status: **{r["status"]}**')
+                if r.get("totals"): lines.append("Totals: " + ", ".join(f'**{k} {v:,}**' for k,v in r["totals"].items()))
+        elif key=="import_parts":
+            r=import_parts_plan(parse_stats(values.get("Current parts")),parse_stats(values.get("Target parts")))
+            lines.extend([f'**{x["part"].replace("_"," ").title()}:** +{x["needed"]:g}' for x in r["rows"]])
+        elif key=="rank":
+            r=rank_progress(_number(values.get("Current rank")) or 0,_number(values.get("Target rank")) or 0)
+            lines.append(f'Progress: **{r["completion_percent"]:.1f}%** • Delta to target: **{r["delta"]:+g}**')
+        elif key=="star_up":
+            req=[_number(x.strip()) for x in values.get("Requirements","").replace("; ",",").split(",") if x.strip()]
+            r=star_up_plan(req,int(_number(values.get("Current star")) or 1),int(_number(values.get("Target star")) or 1),_number(values.get("Current cards")) or 0)
+            lines.append(f'Required cards: **{r["required_cards"]:g}** • Remaining: **{r["remaining_cards"]:g}**')
+        elif key=="garage_progress":
+            r=garage_progress(_number(values.get("Completed")) or 0,_number(values.get("Total")) or 0)
+            lines.append(f'Garage completion: **{r["completion_percent"]:.1f}%** • Remaining: **{r["remaining"]:g}**')
+        elif key=="event_rewards":
+            r=event_reward_plan(_number(values.get("Attempts")) or 0,_number(values.get("Reward per attempt")) or 0,_number(values.get("Target reward")) or 0,_number(values.get("Current reward")) or 0)
+            lines.append(f'Remaining reward: **{r["remaining_reward"]:g}**')
+            if r["expected_attempts"] is not None: lines.append(f'Expected attempts: **{r["expected_attempts"]:.1f}** • reachable: **{"yes" if r["target_reachable_with_capacity"] else "no"}**')
+        elif key=="evo":
+            r=evo_compare(ALU_DATA,values.get("Car A",""),values.get("Car B",""))
+            lines.append(f'Status: **{r["status"]}**')
+            if r.get("ok"): lines.append(f'Profiles loaded: **{r["a"].id}** vs **{r["b"].id}**')
+        elif key=="car_compare":
+            r=compare_cars(ALU_DATA,values.get("Car A",""),values.get("Car B",""))
+            if not r.get("ok"):
+                lines.append("One or both cars were not found in centralized data.")
+            else:
+                lines.extend([f'**{x["stat"].replace("_"," ").title()}:** {x["a"] if x["a"] is not None else "—"} → {x["b"] if x["b"] is not None else "—"}' for x in r["stats"]])
+                lines.append(f'Verification: A **{r["a"].verification.value}** • B **{r["b"].verification.value}**')
         else:
             lines.append("Inputs received and processed.")
     except ValueError as exc:
@@ -394,10 +443,12 @@ def build_tool_embed(key: str) -> discord.Embed:
 def build_dashboard_embed() -> discord.Embed:
     embed = discord.Embed(
         title="🏁 Shohan's Companion • Asphalt Legends Unite Tools",
-        description=("Select a tool below to open its Discord interface.\n\nThe 12 tools shown here match the current Shohan's Companion tool list. Each tool has its own input flow, while numerical game data remains separate."),
+        description=("Select a tool below to open its Discord interface.\n\nThe dashboard covers reference lookups, calculators, planners, comparisons, and private notes. Each tool uses explicit inputs or verified centralized records; numerical game data is never invented."),
         color=TEAL,
     )
-    embed.add_field(name="Available Tools", value="🔧 Upgrades  •  📊 Comparator  •  🏆 Priority  •  📅 Calendar\n❓ FAQ  •  🚙 Hunt  •  🏎️ Simulation  •  🗺️ Maps\n🔮 Rating  •  💸 Cost  •  🏁 Events  •  📝 Notes", inline=False)
+    embed.add_field(name="Available Tools", value="🔧 Upgrades  •  📊 Comparator  •  🏆 Priority  •  📅 Calendar\n❓ FAQ  •  🚙 Hunt  •  🏎️ Simulation  •  🗺️ Maps\n🔮 Rating  •  💸 Cost  •  🏁 Events
+🧩 Blueprints • 🛠️ Upgrade Planner • 🔩 Parts • 📈 Rank • ⭐ Star-Up
+🚗 Garage Progress • 🎁 Event Rewards • 🧬 EVO • 🏎️ Car Compare • 📝 Notes", inline=False)
     embed.set_footer(text="🧪 Shohan's Lab  •  🌐 alu.shohanlab.com")
     return embed
 
