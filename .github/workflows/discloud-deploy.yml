@@ -30,11 +30,39 @@ jobs:
         run: |
           zip -r deploy.zip *.py data discloud.config requirements.txt
 
-      - name: ⚡ Upload Bundle to Discloud
+      - name: 🟢 Setup Node for official Discloud SDK
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: "20"
+
+      - name: 📦 Install official Discloud SDK
+        run: npm install --no-save discloud.app
+
+      - name: ⚡ Deploy Bundle to Discloud
         env:
           DISCLOUD_TOKEN: ${{ secrets.DISCLOUD_TOKEN }}
         run: |
           test -n "$DISCLOUD_TOKEN"
-          curl --fail-with-body -X PUT "https://discloudbot.com" \
-            -H "api-token: $DISCLOUD_TOKEN" \
-            -F "file=@deploy.zip"
+          node <<'NODE'
+          const { discloud } = require("discloud.app");
+
+          async function main() {
+            await discloud.login(process.env.DISCLOUD_TOKEN);
+            const apps = await discloud.apps.fetch("all");
+            const entries = [...apps.entries()];
+            const target = entries.find(([, app]) => app.name === "AsphaltBot");
+
+            if (target) {
+              await discloud.apps.update(target[0], { file: "./deploy.zip" });
+              console.log(`Discloud app ${target[0]} updated successfully.`);
+            } else {
+              await discloud.apps.create({ file: "./deploy.zip" });
+              console.log("Discloud app created successfully.");
+            }
+          }
+
+          main().catch((error) => {
+            console.error("Discloud deployment failed:", error?.message || error);
+            process.exit(1);
+          });
+          NODE
