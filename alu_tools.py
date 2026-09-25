@@ -37,7 +37,7 @@ TOOL_DEFINITIONS = {
     "event_rewards": {"label": "Event Reward Planner", "emoji": "🎁", "description": "Estimate reward progress from supplied attempt and reward values.", "fields": ["Event", "Attempts", "Reward per attempt", "Target reward", "Current reward"]},
     "evo": {"label": "EVO / Build Comparison", "emoji": "🧬", "description": "Compare verified EVO profiles without inventing missing values.", "fields": ["Car A", "Car B", "Context"]},
     "car_compare": {"label": "Car Comparison", "emoji": "🏎️", "description": "Compare centralized car records and their provenance.", "fields": ["Car A", "Car B", "Stats A", "Stats B", "Criteria"]},
-    "data_health": {"label": "ALU Data Health", "emoji": "🩺", "description": "Inspect ALU data freshness, provenance, verification, and source-use state.", "fields": ["Report type"]},,
+    "data_health": {"label": "ALU Data Health", "emoji": "🩺", "description": "Inspect ALU data freshness, provenance, verification, and source-use state.", "fields": ["Report type"]},
     "search": {"label": "Global ALU Search", "emoji": "🔎", "description": "Search centralized cars, tracks, or events without leaving the dashboard.", "fields": ["Search type", "Query"]},
     "garage": {"label": "My Garage Snapshot", "emoji": "🚗", "description": "Analyze your current garage progress using values you provide.", "fields": ["Car / category", "Current progress", "Goal", "Notes"]},
     "redeem": {"label": "Redeem Center", "emoji": "🎁", "description": "Verified ALU redeem-code information when code records are available.", "fields": ["Code or search"]},
@@ -49,10 +49,12 @@ TEAL = discord.Color.from_rgb(7, 24, 27)
 
 
 class ToolInputModal(discord.ui.Modal):
-    def __init__(self, key: str):
+    def __init__(self, key: str, cog=None, user_id=None):
         tool = TOOL_DEFINITIONS[key]
         super().__init__(title=tool["label"][:45])
         self.key = key
+        self.cog = cog
+        self.user_id = str(user_id) if user_id is not None else None
         for index, field_name in enumerate(tool["fields"][:5]):
             self.add_item(discord.ui.TextInput(
                 label=field_name[:45],
@@ -69,6 +71,9 @@ class ToolInputModal(discord.ui.Modal):
             value = getattr(item, "value", "").strip()
             if value:
                 values[tool["fields"][index]] = value
+        if self.cog is not None and self.user_id is not None:
+            await self.cog.record_tool_use(self.user_id, self.key)
+            await self.cog.persist_tool_state(self.user_id, self.key, values)
         await interaction.response.send_message(embed=build_tool_result_embed(self.key, values), ephemeral=True)
 
 class NotesHubView(discord.ui.View):
@@ -484,7 +489,7 @@ class ToolActionView(discord.ui.View):
 
     @discord.ui.button(label="Enter Tool Inputs", style=discord.ButtonStyle.primary, emoji="🧰")
     async def inputs(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(ToolInputModal(self.key))
+        await interaction.response.send_modal(ToolInputModal(self.key, cog=self.owner_view.cog if self.owner_view else None, user_id=interaction.user.id))
 
     @discord.ui.button(label="↩️ Back", style=discord.ButtonStyle.secondary, emoji="↩️")
     async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -725,10 +730,32 @@ class AsphaltToolsView(discord.ui.View):
 
 
 class AsphaltToolsCog(commands.Cog):
-    def __init__(self, bot: discord.Client, notes_collection):
+    def __init__(self, bot: discord.Client, notes_collection, garage_collection=None, favorites_collection=None, settings_collection=None, usage_collection=None, redeem_collection=None):
         self.bot = bot
         self.notes_collection = notes_collection
+        self.garage_collection = garage_collection
+        self.favorites_collection = favorites_collection
+        self.settings_collection = settings_collection
+        self.usage_collection = usage_collection
+        self.redeem_collection = redeem_collection
         self.reminder_loop.start()
+
+    async def record_tool_use(self, user_id, key):
+        if self.usage_collection is None: return
+        now = datetime.now(timezone.utc)
+        await asyncio.get_event_loop().run_in_executor(None, lambda: self.usage_collection.update_one({"user_id": str(user_id), "tool": key}, {"$set": {"last_used_at": now}, "$inc": {"use_count": 1}}, upsert=True))
+
+    async def persist_tool_state(self, user_id, key, values):
+        loop = asyncio.get_event_loop(); uid = str(user_id); now = datetime.now(timezone.utc)
+        if key == "favorites" and self.favorites_collection is not None:
+            name = (values.get("Tool name") or "").strip()
+            if name: await loop.run_in_executor(None, lambda: self.favorites_collection.update_one({"user_id": uid, "tool": name}, {"$set": {"updated_at": now}}, upsert=True))
+        elif key == "settings" and self.settings_collection is not None:
+            setting = (values.get("Setting") or "").strip(); value = (values.get("Value") or "").strip()
+            if setting and value: await loop.run_in_executor(None, lambda: self.settings_collection.update_one({"user_id": uid, "setting": setting}, {"$set": {"value": value, "updated_at": now}}, upsert=True))
+        elif key == "garage" and self.garage_collection is not None:
+            doc={"user_id":uid,"category":values.get("Car / category",""),"current":values.get("Current progress",""),"goal":values.get("Goal",""),"notes":values.get("Notes",""),"updated_at":now}
+            await loop.run_in_executor(None, lambda: self.garage_collection.update_one({"user_id":uid,"category":doc["category"]},{"$set":doc},upsert=True))
 
     async def insert_note(self, doc):
         loop = asyncio.get_event_loop()
@@ -820,5 +847,5 @@ class AsphaltToolsCog(commands.Cog):
         await interaction.response.send_message(embed=build_notes_embed(), view=NotesHubView(self), ephemeral=True)
 
 
-async def setup_alu_tools(bot, notes_collection):
-    await bot.add_cog(AsphaltToolsCog(bot, notes_collection))
+async def setup_alu_tools(bot, notes_collection, garage_collection=None, favorites_collection=None, settings_collection=None, usage_collection=None, redeem_collection=None):
+    await bot.add_cog(AsphaltToolsCog(bot, notes_collection, garage_collection, favorites_collection, settings_collection, usage_collection, redeem_collection))
