@@ -20,7 +20,7 @@ TOOL_DEFINITIONS = {
     "calendar": {"label": "Season Calendar", "emoji": "📅", "description": "Browse season and event information once verified event dates are connected.", "fields": ["Season or event", "Start date", "End date", "Event type", "Filter"]},
     "faq": {"label": "FAQ", "emoji": "❓", "description": "Find answers to frequently asked questions.", "fields": ["Question or topic"]},
     "hunt": {"label": "Hunt Game", "emoji": "🚙", "description": "Estimate attempts needed for a card or blueprint goal using your supplied drop rate.", "fields": ["Car / hunt", "Current cards", "Target cards", "Drop rate"]},
-    "simulation": {"label": "Simulation", "emoji": "🏎️", "description": "Prepare race simulations from supplied matchup inputs.", "fields": ["Car A", "Car B", "Track", "Races"]},
+    "simulation": {"label": "Simulation", "emoji": "🏎️", "description": "Run a transparent input-only matchup model from supplied stats.", "fields": ["Car A", "Car B", "Stats A", "Stats B", "Races"]},
     "maps": {"label": "Race Maps", "emoji": "🗺️", "description": "Search and organize race maps and track variants.", "fields": ["Map or track", "Variant", "Direction"]},
     "rating": {"label": "Rating Predictor", "emoji": "🔮", "description": "Analyze a supplied Gauntlet rating against verified reference data.", "fields": ["Gauntlet rating", "Season / context", "Reference rating", "Sample size"]},
     "cost": {"label": "Cost Calculator", "emoji": "💸", "description": "Calculate upgrade costs when verified game cost data is available.", "fields": ["Car", "Current star", "Target star", "Current rank", "Target rank"]},
@@ -209,7 +209,28 @@ FAQ_CATEGORIES = {
     "DONATIONS": ["How can I support this project?", "Is donating required to use the site?"],
 }
 
-FAQ_ANSWERS = {"Is donating required to use the site?": "Absolutely not. Everything is free. Donations just help keep the project alive."}
+FAQ_ANSWERS = {
+    "What is Asphalt United Companion?": "A fan-made toolkit for organizing ALU car, event, track, upgrade, and planning information.",
+    "Do I need an account?": "Only features that save data need your Discord/site identity. Reference tools can operate from supplied inputs.",
+    "Is this affiliated with Gameloft?": "No. It is an independent fan project.",
+    "Does it work on mobile?": "The Discord interface is designed around Discord's supported mobile and desktop UI controls.",
+    "Is my data private?": "Saved notes are scoped to your Discord user ID. Do not put secrets or sensitive information into notes.",
+    "How do I add a car?": "Use the garage/profile workflow when available; centralized reference data is separate from personal garage data.",
+    "Can I update a car after adding it?": "Yes. Personal garage values should be treated as user-maintained state and can be updated without changing reference data.",
+    "Why does the garage matter?": "Garage state lets planning tools compare your current progress with goals.",
+    "What are Credits and Tokens?": "They are in-game currencies. Exact balances are personal values and must come from your supplied/account-synced data.",
+    "Where do I update my balance?": "Use the personal garage/wallet workflow and enter the current values you actually have.",
+    "What does the Priority tool do?": "It applies a transparent planning heuristic to time, reward, progress, and readiness inputs.",
+    "How is priority calculated?": "The current heuristic weights urgency 35%, reward 25%, progress 20%, and readiness 20%. It is not an official game formula.",
+    "What does the Flow Map show?": "It is intended to visualize planning dependencies and goals; it does not invent game requirements.",
+    "How does the Season Calendar work?": "It searches the centralized event records. Event dates are shown only when those records are loaded and appropriately verified.",
+    "What does a green dot on an event mean?": "Use the calendar's verification/source state rather than assuming a color represents current game data.",
+    "Can I filter by event type?": "Yes, once event records are loaded, the event type can be used as a filter.",
+    "What is the Car Info tool?": "It is a reference lookup for car records and their provenance.",
+    "Can I compare stock vs max stats?": "Yes when both verified records are available; otherwise the tool can compare values you supply.",
+    "How can I support this project?": "You can use the project's published support/donation options if provided by the site owner.",
+    "Is donating required to use the site?": "Absolutely not. Everything is free. Donations are optional."
+}
 
 def build_faq_embed(category=None):
     title = "❓ FAQ" + (f" • {category.title()}" if category else "")
